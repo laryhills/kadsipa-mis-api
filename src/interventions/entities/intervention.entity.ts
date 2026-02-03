@@ -2,9 +2,11 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { EnrollmentEntity } from '@/enrollments/entities/enrollment.entity';
 
 export enum InterventionStatus {
   PENDING = 'pending',
@@ -15,7 +17,7 @@ export enum InterventionStatus {
 @Entity('interventions')
 export class InterventionEntity {
   @PrimaryGeneratedColumn('uuid')
-  id: number;
+  id: string;
 
   @Column({ nullable: false, unique: true })
   program_code: string;
@@ -53,4 +55,7 @@ export class InterventionEntity {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @OneToMany(() => EnrollmentEntity, (enrollment) => enrollment.intervention)
+  enrollments: EnrollmentEntity[];
 }

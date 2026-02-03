@@ -1,0 +1,67 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
+import { BeneficiariesService } from './beneficiaries.service';
+import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
+import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
+import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
+import { createdResponse, successResponse } from '@/common';
+
+@Controller('beneficiaries')
+@UseGuards(PassportJwtGuard)
+export class BeneficiariesController {
+  constructor(private readonly beneficiariesService: BeneficiariesService) {}
+
+  @Post()
+  async create(@Body() createBeneficiaryDto: CreateBeneficiaryDto) {
+    const beneficiary =
+      await this.beneficiariesService.create(createBeneficiaryDto);
+    return createdResponse('Beneficiary created successfully', beneficiary);
+  }
+
+  @Get()
+  async findAll(@Query('includeDeleted') includeDeleted?: string) {
+    const beneficiaries = await this.beneficiariesService.findAll(
+      includeDeleted === 'true',
+    );
+    return successResponse('Beneficiaries fetched successfully', beneficiaries);
+  }
+
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    const beneficiary = await this.beneficiariesService.findOne(id);
+    return successResponse('Beneficiary fetched successfully', beneficiary);
+  }
+
+  @Patch(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() updateBeneficiaryDto: UpdateBeneficiaryDto,
+  ) {
+    const beneficiary = await this.beneficiariesService.update(
+      id,
+      updateBeneficiaryDto,
+    );
+    return successResponse('Beneficiary updated successfully', beneficiary);
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    await this.beneficiariesService.remove(id);
+    return successResponse('Beneficiary deleted successfully', null);
+  }
+
+  @Post(':id/restore')
+  async restore(@Param('id') id: string) {
+    const beneficiary = await this.beneficiariesService.restore(id);
+    return successResponse('Beneficiary restored successfully', beneficiary);
+  }
+}
