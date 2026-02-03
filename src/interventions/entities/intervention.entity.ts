@@ -14,14 +14,26 @@ export enum InterventionStatus {
 
 @Entity('interventions')
 export class InterventionEntity {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn('uuid')
   id: number;
 
+  @Column({ nullable: false, unique: true })
+  program_code: string;
+
   @Column({ nullable: false })
-  title: string;
+  name: string;
+
+  @Column({ nullable: true })
+  description: string;
+
+  @Column({ nullable: true })
+  program_type: string;
 
   @Column({ type: 'decimal', precision: 13, scale: 2, nullable: false })
-  amount: number;
+  budget_allocated: number;
+
+  @Column({ nullable: false })
+  funding_source: string;
 
   @Column({
     type: 'enum',
@@ -30,9 +42,15 @@ export class InterventionEntity {
   })
   status: InterventionStatus;
 
+  @Column({ nullable: false })
+  start_date: Date;
+
+  @Column({ nullable: false })
+  end_date: Date;
+
   @CreateDateColumn()
-  createdAt: Date;
+  created_at: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updated_at: Date;
 }
