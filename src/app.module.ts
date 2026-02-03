@@ -10,6 +10,8 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { BeneficiariesModule } from './beneficiaries/beneficiaries.module';
 import { EnrollmentsModule } from './enrollments/enrollments.module';
+import { LgasModule } from './lgas/lgas.module';
+import { WardsModule } from './wards/wards.module';
 
 @Module({
   imports: [
@@ -51,6 +53,8 @@ import { EnrollmentsModule } from './enrollments/enrollments.module';
     AuthModule,
     BeneficiariesModule,
     EnrollmentsModule,
+    LgasModule,
+    WardsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
