@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { join } from 'path';
 import databaseConfig from '../config/database.config';
 import { AppController } from './app.controller';
@@ -12,6 +13,8 @@ import { BeneficiariesModule } from './beneficiaries/beneficiaries.module';
 import { EnrollmentsModule } from './enrollments/enrollments.module';
 import { LgasModule } from './lgas/lgas.module';
 import { WardsModule } from './wards/wards.module';
+import { AuditModule } from './audit/audit.module';
+import { TokenRefreshInterceptor } from './auth/interceptors/token-refresh.interceptor';
 
 @Module({
   imports: [
@@ -55,8 +58,15 @@ import { WardsModule } from './wards/wards.module';
     EnrollmentsModule,
     LgasModule,
     WardsModule,
+    AuditModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TokenRefreshInterceptor,
+    },
+  ],
 })
 export class AppModule {}

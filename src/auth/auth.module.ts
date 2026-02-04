@@ -23,6 +23,6 @@ import { ConfigService } from '@nestjs/config';
     }),
     PassportModule,
   ],
-  exports: [AuthService],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

@@ -12,8 +12,10 @@ import type { Request as ExpressRequest } from 'express';
 import { successResponse } from '@/common';
 import { PassportLocalGuard } from './guards/passport-local.guard';
 import { PassportJwtGuard } from './guards/passport-jwt.guard';
+import { Audit } from '@/audit/decorators/audit.decorator';
+import { ActivityType } from '@/audit/constants/audit-action.enum';
 
-type RequestWithUser = ExpressRequest & { user: LoginData };
+export type RequestWithUser = ExpressRequest & { user: LoginData };
 
 @Controller('auth')
 export class AuthController {
@@ -22,6 +24,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('login')
   @UseGuards(PassportLocalGuard)
+  @Audit(ActivityType.AUTH, 'User logged in')
   async login(@Request() request: RequestWithUser) {
     const data = await this.authService.login(request.user);
     return successResponse('Login successful', data, data.token);

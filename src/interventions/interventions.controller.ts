@@ -12,6 +12,7 @@ import { InterventionsService } from './interventions.service';
 import { CreateInterventionDto } from './dto/create-intervention.dto';
 import { UpdateInterventionDto } from './dto/update-intervention.dto';
 import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
+import { successResponse } from '@/common/response.helper';
 
 @Controller('interventions')
 export class InterventionsController {
@@ -24,8 +25,9 @@ export class InterventionsController {
 
   @Get()
   @UseGuards(PassportJwtGuard)
-  findAll() {
-    return this.interventionsService.findAll();
+  async findAll() {
+    const result = await this.interventionsService.findAll();
+    return successResponse('Interventions fetched successfully', result);
   }
 
   @Get(':id')
