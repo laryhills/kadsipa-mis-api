@@ -7,7 +7,8 @@ import {
   DataSource,
   EntityManager,
 } from 'typeorm';
-import { AuditLogEntity } from '../entities/audit-log.entity';
+import { Model } from 'mongoose';
+import { AuditLog } from '../schemas/audit-log.schema';
 import { AuditAction, AuditStatus } from '../constants/audit-action.enum';
 import { calculateDiff, sanitizeValues } from '../utils/diff.util';
 
@@ -21,8 +22,14 @@ interface AuditableEntity {
 
 @EventSubscriber()
 export class AuditSubscriber implements EntitySubscriberInterface {
+  private auditLogModel: Model<AuditLog>;
+
   constructor(dataSource: DataSource) {
     dataSource.subscribers.push(this);
+  }
+
+  setAuditLogModel(model: Model<AuditLog>): void {
+    this.auditLogModel = model;
   }
 
   private async createAuditLog(
@@ -34,11 +41,9 @@ export class AuditSubscriber implements EntitySubscriberInterface {
     try {
       const entityName = entity.constructor.name.replace('Entity', '');
 
-      if (this.shouldSkipAudit(entityName) || !entity.manager) {
+      if (this.shouldSkipAudit(entityName) || !this.auditLogModel) {
         return;
       }
-
-      const auditLogRepository = entity.manager.getRepository(AuditLogEntity);
 
       const sanitizedOldValues = oldValues ? sanitizeValues(oldValues) : null;
       const sanitizedNewValues = newValues ? sanitizeValues(newValues) : null;
@@ -50,18 +55,18 @@ export class AuditSubscriber implements EntitySubscriberInterface {
 
       const userId = this.extractUserId(entity);
 
-      const auditLog = auditLogRepository.create({
-        user_id: userId ?? undefined,
+      const auditLog = new this.auditLogModel({
+        userId: userId ?? undefined,
         action,
-        resource_type: entityName.toLowerCase(),
-        resource_id: entity.id ?? '',
-        old_values: sanitizedOldValues,
-        new_values: sanitizedNewValues,
-        changes_diff: changesDiff,
+        resourceType: entityName.toLowerCase(),
+        resourceId: entity.id ?? '',
+        oldValues: sanitizedOldValues,
+        newValues: sanitizedNewValues,
+        changesDiff: changesDiff,
         status: AuditStatus.SUCCESS,
       });
 
-      await auditLogRepository.save(auditLog);
+      await auditLog.save();
     } catch (error) {
       console.error('Error creating audit log:', error);
     }

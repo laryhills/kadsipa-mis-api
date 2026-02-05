@@ -54,11 +54,13 @@ export class AuditInterceptor implements NestInterceptor {
                 activityType: auditMetadata.activityType,
                 description: auditMetadata.description,
                 logDetails: {
-                  method: request.method,
                   url: request.url,
-                  params: request.params,
-                  body: this.sanitizeBody(request.body),
+                  method: request.method,
                   response: this.sanitizeResponse(data),
+                  // Uncomment to add params (if needed):
+                  // params: request.params,
+                  // Uncomment to add sanitized body (removes sensitive fields):
+                  // body: this.sanitizeBody(request.body),
                 },
                 ipAddress,
               });
@@ -76,11 +78,13 @@ export class AuditInterceptor implements NestInterceptor {
                 activityType: auditMetadata.activityType,
                 description: `${auditMetadata.description} - FAILED`,
                 logDetails: {
-                  method: request.method,
                   url: request.url,
-                  params: request.params,
-                  error: httpError.message,
-                  statusCode: httpError.status,
+                  method: request.method,
+                  response: {
+                    success: false,
+                    error: httpError.message,
+                    statusCode: httpError.status,
+                  },
                 },
                 ipAddress,
               });

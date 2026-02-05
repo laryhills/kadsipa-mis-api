@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, FindOptionsWhere } from 'typeorm';
-import { AuditLogEntity } from '../entities/audit-log.entity';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { AuditLog } from '../schemas/audit-log.schema';
 import { QueryAuditLogDto } from '../dto/query-audit-log.dto';
 import { AuditAction, AuditStatus } from '../constants/audit-action.enum';
 import { calculateDiff, sanitizeValues } from '../utils/diff.util';
@@ -18,14 +18,26 @@ export interface CreateAuditLogData {
   status?: AuditStatus;
 }
 
+interface AuditLogFilter {
+  userId?: string;
+  action?: AuditAction;
+  resourceType?: string;
+  resourceId?: string;
+  status?: AuditStatus;
+  createdAt?: {
+    $gte?: Date;
+    $lte?: Date;
+  };
+}
+
 @Injectable()
 export class AuditLogsService {
   constructor(
-    @InjectRepository(AuditLogEntity)
-    private readonly auditLogRepository: Repository<AuditLogEntity>,
+    @InjectModel(AuditLog.name)
+    private readonly auditLogModel: Model<AuditLog>,
   ) {}
 
-  async create(data: CreateAuditLogData): Promise<AuditLogEntity> {
+  async create(data: CreateAuditLogData): Promise<any> {
     const sanitizedOldValues = sanitizeValues(data.oldValues);
     const sanitizedNewValues = sanitizeValues(data.newValues);
 
@@ -34,20 +46,20 @@ export class AuditLogsService {
         ? calculateDiff(sanitizedOldValues, sanitizedNewValues)
         : null;
 
-    const auditLog = this.auditLogRepository.create({
-      user_id: data.userId,
+    const auditLog = new this.auditLogModel({
+      userId: data.userId,
       action: data.action,
-      resource_type: data.resourceType,
-      resource_id: data.resourceId,
-      old_values: sanitizedOldValues,
-      new_values: sanitizedNewValues,
-      changes_diff: changesDiff,
-      ip_address: data.ipAddress,
-      user_agent: data.userAgent,
+      resourceType: data.resourceType,
+      resourceId: data.resourceId,
+      oldValues: sanitizedOldValues,
+      newValues: sanitizedNewValues,
+      changesDiff: changesDiff,
+      ipAddress: data.ipAddress,
+      userAgent: data.userAgent,
       status: data.status || AuditStatus.SUCCESS,
     });
 
-    return await this.auditLogRepository.save(auditLog);
+    return await auditLog.save();
   }
 
   async findAll(query: QueryAuditLogDto) {
@@ -63,27 +75,38 @@ export class AuditLogsService {
       limit = 50,
     } = query;
 
-    const where: FindOptionsWhere<AuditLogEntity> = {};
+    const filter: AuditLogFilter = {};
 
-    if (user_id) where.user_id = user_id;
-    if (action) where.action = action;
-    if (resource_type) where.resource_type = resource_type;
-    if (resource_id) where.resource_id = resource_id;
-    if (status) where.status = status;
+    if (user_id) filter.userId = user_id;
+    if (action) filter.action = action;
+    if (resource_type) filter.resourceType = resource_type;
+    if (resource_id) filter.resourceId = resource_id;
+    if (status) filter.status = status;
 
     if (start_date && end_date) {
-      where.created_at = Between(new Date(start_date), new Date(end_date));
+      filter.createdAt = {
+        $gte: new Date(start_date),
+        $lte: new Date(end_date),
+      };
     } else if (start_date) {
-      where.created_at = Between(new Date(start_date), new Date());
+      filter.createdAt = {
+        $gte: new Date(start_date),
+        $lte: new Date(),
+      };
     }
 
-    const [data, total] = await this.auditLogRepository.findAndCount({
-      where,
-      relations: ['user'],
-      order: { created_at: 'DESC' },
-      take: limit,
-      skip: (page - 1) * limit,
-    });
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      this.auditLogModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .exec(),
+      this.auditLogModel.countDocuments(filter).exec(),
+    ]);
 
     return {
       data,
@@ -96,29 +119,27 @@ export class AuditLogsService {
     };
   }
 
-  async findOne(id: string): Promise<AuditLogEntity | null> {
-    return await this.auditLogRepository.findOne({
-      where: { id },
-      relations: ['user'],
-    });
+  async findOne(id: string): Promise<AuditLog | null> {
+    return await this.auditLogModel.findById(id).lean().exec();
   }
 
   async findByResourceId(
     resourceType: string,
     resourceId: string,
-  ): Promise<AuditLogEntity[]> {
-    return await this.auditLogRepository.find({
-      where: { resource_type: resourceType, resource_id: resourceId },
-      relations: ['user'],
-      order: { created_at: 'DESC' },
-    });
+  ): Promise<any[]> {
+    return await this.auditLogModel
+      .find({ resourceType, resourceId })
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
   }
 
-  async findByUserId(userId: string): Promise<AuditLogEntity[]> {
-    return await this.auditLogRepository.find({
-      where: { user_id: userId },
-      order: { created_at: 'DESC' },
-      take: 100,
-    });
+  async findByUserId(userId: string): Promise<any[]> {
+    return await this.auditLogModel
+      .find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean()
+      .exec();
   }
 }

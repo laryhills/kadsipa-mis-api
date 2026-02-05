@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, FindOptionsWhere } from 'typeorm';
-import { ActivityLogEntity } from '../entities/activity-log.entity';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { ActivityLog } from '../schemas/activity-log.schema';
 import { QueryActivityLogDto } from '../dto/query-activity-log.dto';
 import { ActivityType } from '../constants/audit-action.enum';
 
@@ -13,23 +13,31 @@ export interface CreateActivityLogData {
   ipAddress?: string;
 }
 
+interface ActivityLogFilter {
+  userId?: string;
+  activityType?: ActivityType;
+  createdAt?: {
+    $gte?: Date;
+    $lte?: Date;
+  };
+}
 @Injectable()
 export class ActivityLogsService {
   constructor(
-    @InjectRepository(ActivityLogEntity)
-    private readonly activityLogRepository: Repository<ActivityLogEntity>,
+    @InjectModel(ActivityLog.name)
+    private readonly activityLogModel: Model<ActivityLog>,
   ) {}
 
-  async create(data: CreateActivityLogData): Promise<ActivityLogEntity> {
-    const activityLog = this.activityLogRepository.create({
-      user_id: data.userId,
-      activity_type: data.activityType,
+  async create(data: CreateActivityLogData): Promise<any> {
+    const activityLog = new this.activityLogModel({
+      userId: data.userId,
+      activityType: data.activityType,
       description: data.description,
-      log_details: data.logDetails,
-      ip_address: data.ipAddress,
+      logDetails: data.logDetails,
+      ipAddress: data.ipAddress,
     });
 
-    return await this.activityLogRepository.save(activityLog);
+    return await activityLog.save();
   }
 
   async findAll(query: QueryActivityLogDto) {
@@ -42,24 +50,35 @@ export class ActivityLogsService {
       limit = 50,
     } = query;
 
-    const where: FindOptionsWhere<ActivityLogEntity> = {};
+    const filter: ActivityLogFilter = {};
 
-    if (user_id) where.user_id = user_id;
-    if (activity_type) where.activity_type = activity_type;
+    if (user_id) filter.userId = user_id;
+    if (activity_type) filter.activityType = activity_type;
 
     if (start_date && end_date) {
-      where.created_at = Between(new Date(start_date), new Date(end_date));
+      filter.createdAt = {
+        $gte: new Date(start_date),
+        $lte: new Date(end_date),
+      };
     } else if (start_date) {
-      where.created_at = Between(new Date(start_date), new Date());
+      filter.createdAt = {
+        $gte: new Date(start_date),
+        $lte: new Date(),
+      };
     }
 
-    const [data, total] = await this.activityLogRepository.findAndCount({
-      where,
-      relations: ['user'],
-      order: { created_at: 'DESC' },
-      take: limit,
-      skip: (page - 1) * limit,
-    });
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      this.activityLogModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .exec(),
+      this.activityLogModel.countDocuments(filter).exec(),
+    ]);
 
     return {
       data,
@@ -72,18 +91,16 @@ export class ActivityLogsService {
     };
   }
 
-  async findOne(id: string): Promise<ActivityLogEntity | null> {
-    return await this.activityLogRepository.findOne({
-      where: { id },
-      relations: ['user'],
-    });
+  async findOne(id: string): Promise<ActivityLog | null> {
+    return await this.activityLogModel.findById(id).lean().exec();
   }
 
-  async findByUserId(userId: string): Promise<ActivityLogEntity[]> {
-    return await this.activityLogRepository.find({
-      where: { user_id: userId },
-      order: { created_at: 'DESC' },
-      take: 100,
-    });
+  async findByUserId(userId: string): Promise<any[]> {
+    return await this.activityLogModel
+      .find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean()
+      .exec();
   }
 }

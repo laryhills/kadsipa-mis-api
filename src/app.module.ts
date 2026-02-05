@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { join } from 'path';
 import databaseConfig from '../config/database.config';
@@ -33,6 +34,7 @@ import { TokenRefreshInterceptor } from './auth/interceptors/token-refresh.inter
           throw new Error('DATABASE_PASSWORD is not defined');
         if (!env.DATABASE_NAME) throw new Error('DATABASE_NAME is not defined');
         if (!env.JWT_SECRET) throw new Error('JWT_SECRET is not defined');
+        if (!env.MONGO_URI) throw new Error('MONGO_URI is not defined');
         return env;
       },
     }),
@@ -49,6 +51,16 @@ import { TokenRefreshInterceptor } from './auth/interceptors/token-refresh.inter
         // TODO: set to false in production for migrations to work
         synchronize: true, // must be false in production for migrations to work
       }),
+      inject: [ConfigService],
+    }),
+    MongooseModule.forRootAsync({
+      useFactory: (configService: ConfigService) => {
+        return {
+          uri: configService.get('MONGO_URI'),
+          retryAttempts: 3,
+          retryDelay: 1000,
+        };
+      },
       inject: [ConfigService],
     }),
     InterventionsModule,
