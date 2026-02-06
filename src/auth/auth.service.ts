@@ -60,21 +60,11 @@ export class AuthService {
     return null;
   }
 
-  async login(user: LoginData): Promise<LoginResponse> {
-    const payload = {
-      sub: user.id,
-      email: user.email,
-    };
-
-    const token = await this.jwtService.signAsync(payload);
+  async login(user: LoginData): Promise<LoginData> {
     // update last login at
     await this.usersService.updateLastLoginAt(user.id);
 
-    return {
-      ...user,
-      // token: this.generateAccessToken(user),
-      token,
-    };
+    return user;
   }
 
   logout(): void {

@@ -1,34 +1,104 @@
-import { Body, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateInterventionDto } from './dto/create-intervention.dto';
 import { UpdateInterventionDto } from './dto/update-intervention.dto';
-import { Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { InterventionEntity } from '@/interventions/entities/intervention.entity';
 import { InjectRepository } from '@nestjs/typeorm';
+import { LgaEntity } from '@/lgas/entities/lga.entity';
+import { UUID_REGEX } from '@/common/constants';
 
 @Injectable()
 export class InterventionsService {
   constructor(
     @InjectRepository(InterventionEntity)
     private interventionRepository: Repository<InterventionEntity>,
+    @InjectRepository(LgaEntity)
+    private lgaRepository: Repository<LgaEntity>,
   ) {}
 
-  create(@Body() createInterventionDto: CreateInterventionDto) {
-    return 'This action adds a new intervention';
+  async create(@Body() createInterventionDto: CreateInterventionDto) {
+    const { lga_ids, ...interventionData } = createInterventionDto;
+
+    const lgas = await this.lgaRepository.findBy({ id: In(lga_ids) });
+
+    if (lgas.length !== lga_ids.length) {
+      const foundIds = lgas.map((lga) => lga.id);
+      const missingIds = lga_ids.filter((id) => !foundIds.includes(id));
+      throw new BadRequestException(
+        `LGAs with IDs ${missingIds.join(', ')} not found`,
+      );
+    }
+
+    const intervention = this.interventionRepository.create({
+      ...interventionData,
+      lgas,
+    });
+
+    return await this.interventionRepository.save(intervention);
   }
 
   async findAll() {
-    return await this.interventionRepository.find();
+    return await this.interventionRepository.find({
+      relations: ['lgas'],
+    });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} intervention`;
+  async findOne(id: string) {
+    if (!UUID_REGEX.test(id)) {
+      throw new BadRequestException('Invalid intervention ID');
+    }
+
+    const intervention = await this.interventionRepository.findOne({
+      where: { id, deleted_at: IsNull() },
+      relations: ['lgas'],
+    });
+
+    if (!intervention) {
+      throw new NotFoundException(`Intervention with ID ${id} not found`);
+    }
+
+    return intervention;
   }
 
-  update(id: number, updateInterventionDto: UpdateInterventionDto) {
-    return `This action updates a #${id} intervention`;
+  async update(id: string, updateInterventionDto: UpdateInterventionDto) {
+    const intervention = await this.findOne(id);
+
+    const { lga_ids, ...interventionData } = updateInterventionDto;
+
+    if (lga_ids) {
+      const lgas = await this.lgaRepository.findBy({ id: In(lga_ids) });
+
+      if (lgas.length !== lga_ids.length) {
+        const foundIds = lgas.map((lga) => lga.id);
+        const missingIds = lga_ids.filter((id) => !foundIds.includes(id));
+        throw new BadRequestException(
+          `LGAs with IDs ${missingIds.join(', ')} not found`,
+        );
+      }
+
+      intervention.lgas = lgas;
+    }
+
+    Object.assign(intervention, interventionData);
+
+    return await this.interventionRepository.save(intervention);
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} intervention`;
+  async remove(id: string) {
+    if (!UUID_REGEX.test(id)) {
+      throw new BadRequestException('Invalid intervention ID');
+    }
+
+    const intervention = await this.findOne(id);
+    if (!intervention) {
+      throw new NotFoundException(`Intervention with ID ${id} not found`);
+    }
+    // perform soft delete
+    return await this.interventionRepository.softDelete(intervention.id);
   }
 }

@@ -2,11 +2,14 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinTable,
+  ManyToMany,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { EnrollmentEntity } from '@/enrollments/entities/enrollment.entity';
+import { LgaEntity } from '@/lgas/entities/lga.entity';
 
 export enum InterventionStatus {
   PENDING = 'pending',
@@ -56,6 +59,17 @@ export class InterventionEntity {
   @UpdateDateColumn()
   updated_at: Date;
 
+  @Column({ type: 'timestamp', nullable: true })
+  deleted_at: Date;
+
   @OneToMany(() => EnrollmentEntity, (enrollment) => enrollment.intervention)
   enrollments: EnrollmentEntity[];
+
+  @ManyToMany(() => LgaEntity, (lga) => lga.interventions)
+  @JoinTable({
+    name: 'intervention_lgas',
+    joinColumn: { name: 'intervention_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'lga_id', referencedColumnName: 'id' },
+  })
+  lgas: LgaEntity[];
 }

@@ -3,6 +3,7 @@ import {
   CreateDateColumn,
   Entity,
   JoinColumn,
+  ManyToMany,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
@@ -10,6 +11,7 @@ import {
 } from 'typeorm';
 import { StateEntity } from './state.entity';
 import { WardEntity } from '@/wards/entities/ward.entity';
+import { InterventionEntity } from '@/interventions/entities/intervention.entity';
 
 @Entity('lgas')
 export class LgaEntity {
@@ -34,4 +36,7 @@ export class LgaEntity {
 
   @OneToMany(() => WardEntity, (ward) => ward.lga)
   wards: WardEntity[];
+
+  @ManyToMany(() => InterventionEntity, (intervention) => intervention.lgas)
+  interventions: InterventionEntity[];
 }

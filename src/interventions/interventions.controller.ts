@@ -32,7 +32,7 @@ export class InterventionsController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.interventionsService.findOne(+id);
+    return this.interventionsService.findOne(id);
   }
 
   @Patch(':id')
@@ -40,11 +40,11 @@ export class InterventionsController {
     @Param('id') id: string,
     @Body() updateInterventionDto: UpdateInterventionDto,
   ) {
-    return this.interventionsService.update(+id, updateInterventionDto);
+    return this.interventionsService.update(id, updateInterventionDto);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.interventionsService.remove(+id);
+    return this.interventionsService.remove(id);
   }
 }

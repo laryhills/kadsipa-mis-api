@@ -27,7 +27,7 @@ export class AuthController {
   @Audit(ActivityType.AUTH, 'User logged in')
   async login(@Request() request: RequestWithUser) {
     const data = await this.authService.login(request.user);
-    return successResponse('Login successful', data, data.token);
+    return successResponse('Login successful', data);
   }
 
   @HttpCode(HttpStatus.OK)
