@@ -1,4 +1,8 @@
-import { AuthService, type LoginData } from '@/auth/auth.service';
+import {
+  AuthService,
+  type LoginData,
+  type LoginResponse,
+} from '@/auth/auth.service';
 import {
   BadRequestException,
   Body,
@@ -6,17 +10,26 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Ip,
   Post,
+  Req,
   Request,
   UseGuards,
 } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
 import { successResponse } from '@/common';
-import { PassportLocalGuard } from './guards/passport-local.guard';
 import { PassportJwtGuard } from './guards/passport-jwt.guard';
 import { Audit } from '@/audit/decorators/audit.decorator';
 import { ActivityType } from '@/audit/constants/audit-action.enum';
 import { NotificationService } from '@/notifications/notifications.service';
+import { OtpService } from './services/otp.service';
+import { RefreshTokenService } from './services/refresh-token.service';
+import { RateLimiterService } from './services/rate-limiter.service';
+import { LoginDto, VerifyOtpDto, ResendOtpDto } from './dto/login.dto';
+import { OtpType } from './entities/otp.entity';
+import { UsersService } from '@/users/users.service';
+import { UserStatus } from '@/users/entities/user.entity';
+import { TooManyRequestsException } from '@/common/exceptions/too-many-requests.exception';
 
 export type RequestWithUser = ExpressRequest & { user: LoginData };
 
@@ -24,16 +37,166 @@ export type RequestWithUser = ExpressRequest & { user: LoginData };
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly usersService: UsersService,
     private readonly notificationService: NotificationService,
+    private readonly otpService: OtpService,
+    private readonly refreshTokenService: RefreshTokenService,
+    private readonly rateLimiterService: RateLimiterService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
-  @UseGuards(PassportLocalGuard)
-  @Audit(ActivityType.AUTH, 'User logged in')
-  async login(@Request() request: RequestWithUser) {
-    const data = await this.authService.login(request.user);
-    return successResponse('Login successful', data);
+  @Audit(ActivityType.AUTH, 'User requested OTP')
+  async requestOtp(@Body() loginDto: LoginDto) {
+    const rateLimit = await this.rateLimiterService.checkOtpRateLimit(
+      loginDto.email,
+    );
+
+    if (!rateLimit.allowed) {
+      throw new TooManyRequestsException(
+        `Too many OTP requests. Please try again after ${rateLimit.resetAt.toLocaleTimeString()}`,
+      );
+    }
+
+    const user = await this.authService.validateUser(loginDto);
+    if (!user) {
+      throw new BadRequestException('Invalid credentials');
+    }
+
+    const otp = await this.otpService.createOtp(user.id, OtpType.LOGIN);
+
+    if (process.env.NODE_ENV === 'production') {
+      await this.notificationService.sendOtpEmail(user.email, otp.code);
+    }
+
+    const message =
+      process.env.NODE_ENV === 'production'
+        ? 'OTP sent successfully to your email'
+        : `OTP sent successfully to your email [${otp.code}]`;
+    return successResponse(message, {
+      email: user.email,
+      expiresIn: '10 minutes',
+      attemptsRemaining: rateLimit.remaining,
+    });
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('verify-otp')
+  @Audit(ActivityType.AUTH, 'User verified OTP and logged in')
+  async verifyOtp(
+    @Body() verifyOtpDto: VerifyOtpDto,
+    @Req() req: ExpressRequest,
+    @Ip() ip: string,
+  ) {
+    const userEntity = await this.usersService.findOneByEmail(
+      verifyOtpDto.email,
+    );
+
+    if (!userEntity || userEntity.status !== UserStatus.ACTIVE) {
+      throw new BadRequestException('Invalid email or inactive account');
+    }
+
+    await this.otpService.verifyOtp(
+      userEntity.id,
+      verifyOtpDto.code,
+      OtpType.LOGIN,
+    );
+
+    const user: LoginData = {
+      id: userEntity.id,
+      email: userEntity.email,
+      full_name: userEntity.full_name,
+      status: userEntity.status,
+    };
+
+    const accessToken = this.authService.generateAccessToken(user);
+    const refreshToken = await this.refreshTokenService.createRefreshToken(
+      user.id,
+      {
+        userAgent: req.headers['user-agent'],
+        ip,
+      },
+    );
+
+    await this.authService.login(user);
+
+    const response: LoginResponse = {
+      ...user,
+      accessToken,
+      refreshToken,
+    };
+
+    return successResponse('Login successful', response);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('resend-otp')
+  async resendOtp(@Body() resendOtpDto: ResendOtpDto) {
+    const rateLimit = await this.rateLimiterService.checkOtpRateLimit(
+      resendOtpDto.email,
+    );
+
+    if (!rateLimit.allowed) {
+      throw new TooManyRequestsException(
+        `Too many OTP requests. Please try again after ${rateLimit.resetAt.toLocaleTimeString()}`,
+      );
+    }
+
+    const userEntity = await this.usersService.findOneByEmail(
+      resendOtpDto.email,
+    );
+
+    if (!userEntity || userEntity.status !== UserStatus.ACTIVE) {
+      throw new BadRequestException('Invalid email or inactive account');
+    }
+
+    const otp = await this.otpService.createOtp(userEntity.id, OtpType.LOGIN);
+
+    await this.notificationService.sendOtpEmail(userEntity.email, otp.code);
+
+    return successResponse('OTP resent successfully', {
+      email: userEntity.email,
+      expiresIn: '10 minutes',
+      attemptsRemaining: rateLimit.remaining,
+    });
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('refresh')
+  async refreshToken(
+    @Body() body: { refreshToken: string },
+    @Req() req: ExpressRequest,
+    @Ip() ip: string,
+  ) {
+    if (!body.refreshToken) {
+      throw new BadRequestException('Refresh token is required');
+    }
+
+    const { newToken: newRefreshToken, userId } =
+      await this.refreshTokenService.rotateRefreshToken(body.refreshToken, {
+        userAgent: req.headers['user-agent'],
+        ip,
+      });
+
+    const userEntity = await this.usersService.findOne(userId);
+
+    if (!userEntity || userEntity.status !== UserStatus.ACTIVE) {
+      throw new BadRequestException('Invalid user or inactive account');
+    }
+
+    const user: LoginData = {
+      id: userEntity.id,
+      email: userEntity.email,
+      full_name: userEntity.full_name,
+      status: userEntity.status,
+    };
+
+    const accessToken = this.authService.generateAccessToken(user);
+
+    return successResponse('Tokens refreshed successfully', {
+      accessToken,
+      refreshToken: newRefreshToken,
+    });
   }
 
   @HttpCode(HttpStatus.OK)
@@ -44,8 +207,21 @@ export class AuthController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @Post('test-email')
+  @Post('logout')
   @UseGuards(PassportJwtGuard)
+  async logout(
+    @Request() req: RequestWithUser,
+    @Body() body: { refreshToken?: string },
+  ) {
+    if (body.refreshToken) {
+      await this.refreshTokenService.revokeToken(body.refreshToken);
+    }
+
+    return successResponse('Logout successful', null);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('test-email')
   async testEmail(@Body() body: { email: string; code?: string }) {
     if (!body?.email) {
       throw new BadRequestException('Email is required');
@@ -57,11 +233,4 @@ export class AuthController {
       code: testCode,
     });
   }
-
-  /*   @HttpCode(HttpStatus.OK)
-  @Post('logout')
-  @UseGuards(PassportJwtGuard)
-  async logout(@Request() req: RequestWithUser) {
-    return successResponse('Logout successful', null);
-  } */
 }

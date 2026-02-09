@@ -1,6 +1,6 @@
 import { UserEntity, UserStatus } from '@/users/entities/user.entity';
 import { UsersService } from '@/users/users.service';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { comparePassword } from '@/common/utils/hash.util';
 import { JwtService } from '@nestjs/jwt';
 
@@ -13,12 +13,17 @@ export type LoginData = Pick<
   UserEntity,
   'id' | 'email' | 'full_name' | 'status'
 >;
-export type LoginResponse = LoginData & {
-  token: string;
+
+export type TokenPair = {
+  accessToken: string;
+  refreshToken: string;
 };
+
+export type LoginResponse = LoginData & TokenPair;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -67,9 +72,25 @@ export class AuthService {
   }
 
   async login(user: LoginData): Promise<LoginData> {
-    // update last login at
     await this.usersService.updateLastLoginAt(user.id);
-
     return user;
+  }
+
+  generateAccessToken(user: LoginData): string {
+    const payload = {
+      sub: user.id,
+      email: user.email,
+    };
+
+    return this.jwtService.sign(payload);
+  }
+
+  async verifyAccessToken(token: string): Promise<any> {
+    try {
+      return await this.jwtService.verifyAsync(token);
+    } catch (error) {
+      this.logger.error(error);
+      throw new UnauthorizedException('Invalid or expired access token');
+    }
   }
 }

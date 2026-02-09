@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MongooseModule } from '@nestjs/mongoose';
-import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
+import { APP_FILTER } from '@nestjs/core';
 import { join } from 'path';
 import databaseConfig from '../config/database.config';
 import { AppController } from './app.controller';
@@ -15,9 +15,9 @@ import { EnrollmentsModule } from './enrollments/enrollments.module';
 import { LgasModule } from './lgas/lgas.module';
 import { WardsModule } from './wards/wards.module';
 import { AuditModule } from './audit/audit.module';
-import { TokenRefreshInterceptor } from './auth/interceptors/token-refresh.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { NotificationService } from './notifications/notifications.service';
+import { NotificationsModule } from './notifications/notifications.module';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
   imports: [
@@ -39,6 +39,14 @@ import { NotificationService } from './notifications/notifications.service';
         if (!env.MONGO_URI) throw new Error('MONGO_URI is not defined');
         return env;
       },
+    }),
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          ttl: 60000,
+          limit: 10,
+        },
+      ],
     }),
     TypeOrmModule.forRootAsync({
       useFactory: (configService: ConfigService) => ({
@@ -73,6 +81,7 @@ import { NotificationService } from './notifications/notifications.service';
     LgasModule,
     WardsModule,
     AuditModule,
+    NotificationsModule.forRoot(),
   ],
   controllers: [AppController],
   providers: [
@@ -81,11 +90,6 @@ import { NotificationService } from './notifications/notifications.service';
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,
     },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: TokenRefreshInterceptor,
-    },
-    NotificationService,
   ],
 })
 export class AppModule {}
