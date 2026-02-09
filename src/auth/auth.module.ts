@@ -7,9 +7,10 @@ import { LocalStrategy } from './strategies/local.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { NotificationService } from '@/notifications/notifications.service';
 
 @Module({
-  providers: [AuthService, LocalStrategy, JwtStrategy],
+  providers: [AuthService, LocalStrategy, JwtStrategy, NotificationService],
   controllers: [AuthController],
   imports: [
     UsersModule,

@@ -72,8 +72,4 @@ export class AuthService {
 
     return user;
   }
-
-  logout(): void {
-    // TODO: Implement logout logic
-  }
 }

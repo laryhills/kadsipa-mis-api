@@ -1,5 +1,7 @@
 import { AuthService, type LoginData } from '@/auth/auth.service';
 import {
+  BadRequestException,
+  Body,
   Controller,
   Get,
   HttpCode,
@@ -14,12 +16,16 @@ import { PassportLocalGuard } from './guards/passport-local.guard';
 import { PassportJwtGuard } from './guards/passport-jwt.guard';
 import { Audit } from '@/audit/decorators/audit.decorator';
 import { ActivityType } from '@/audit/constants/audit-action.enum';
+import { NotificationService } from '@/notifications/notifications.service';
 
 export type RequestWithUser = ExpressRequest & { user: LoginData };
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
@@ -35,6 +41,21 @@ export class AuthController {
   @UseGuards(PassportJwtGuard)
   getUserInfo(@Request() req: RequestWithUser) {
     return successResponse('User fetched successfully', req.user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('test-email')
+  @UseGuards(PassportJwtGuard)
+  async testEmail(@Body() body: { email: string; code?: string }) {
+    if (!body?.email) {
+      throw new BadRequestException('Email is required');
+    }
+    const testCode = body?.code || '123456';
+    await this.notificationService.sendOtpEmail(body.email, testCode);
+    return successResponse('Test email sent successfully', {
+      email: body.email,
+      code: testCode,
+    });
   }
 
   /*   @HttpCode(HttpStatus.OK)

@@ -31,13 +31,11 @@ export class NotificationService {
         to: email,
         subject: 'Your KADSIPA Verification Code',
         html: `
-          
             KADSIPA Verification Code
             Your verification code is:
             ${code}
             This code will expire in 10 minutes.
             If you didn't request this code, please ignore this email.
-          
         `,
       });
 
