@@ -5,20 +5,42 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  Inject,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { JwtService } from '@nestjs/jwt';
+import { Request, Response } from 'express';
 import { createResponse } from '../response.helper';
+
+interface RequestWithUser extends Request {
+  user?: {
+    id: string;
+    email: string;
+  };
+}
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
+  constructor(@Inject(JwtService) private readonly jwtService: JwtService) {}
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
+    const req = ctx.getRequest<RequestWithUser>();
     const res = ctx.getResponse<Response>();
 
     const { status, message } = this.normalizeException(exception);
-    const body = createResponse(status, message, null);
+    let token: string | undefined;
+
+    if (req.user) {
+      const payload = {
+        sub: req.user.id,
+        email: req.user.email,
+      };
+      token = this.jwtService.sign(payload);
+    }
+
+    const body = createResponse(status, message, null, token);
 
     res.status(status).json(body);
   }

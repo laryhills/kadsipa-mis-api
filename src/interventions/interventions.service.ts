@@ -39,13 +39,16 @@ export class InterventionsService {
       lgas,
     });
 
-    return await this.interventionRepository.save(intervention);
+    const savedIntervention =
+      await this.interventionRepository.save(intervention);
+    return savedIntervention;
   }
 
   async findAll() {
-    return await this.interventionRepository.find({
+    const interventions = await this.interventionRepository.find({
       relations: ['lgas'],
     });
+    return interventions;
   }
 
   async findOne(id: string) {
@@ -66,7 +69,18 @@ export class InterventionsService {
   }
 
   async update(id: string, updateInterventionDto: UpdateInterventionDto) {
-    const intervention = await this.findOne(id);
+    if (!UUID_REGEX.test(id)) {
+      throw new BadRequestException('Invalid intervention ID');
+    }
+
+    const intervention = await this.interventionRepository.findOne({
+      where: { id, deleted_at: IsNull() },
+      relations: ['lgas'],
+    });
+
+    if (!intervention) {
+      throw new NotFoundException(`Intervention with ID ${id} not found`);
+    }
 
     const { lga_ids, ...interventionData } = updateInterventionDto;
 
@@ -86,7 +100,9 @@ export class InterventionsService {
 
     Object.assign(intervention, interventionData);
 
-    return await this.interventionRepository.save(intervention);
+    const updatedIntervention =
+      await this.interventionRepository.save(intervention);
+    return updatedIntervention;
   }
 
   async remove(id: string) {
@@ -94,11 +110,15 @@ export class InterventionsService {
       throw new BadRequestException('Invalid intervention ID');
     }
 
-    const intervention = await this.findOne(id);
+    const intervention = await this.interventionRepository.findOne({
+      where: { id, deleted_at: IsNull() },
+    });
+
     if (!intervention) {
       throw new NotFoundException(`Intervention with ID ${id} not found`);
     }
-    // perform soft delete
-    return await this.interventionRepository.softDelete(intervention.id);
+
+    await this.interventionRepository.softDelete(intervention.id);
+    return intervention;
   }
 }

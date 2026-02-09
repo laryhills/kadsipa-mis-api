@@ -1,4 +1,4 @@
-import { UserEntity } from '@/users/entities/user.entity';
+import { UserEntity, UserStatus } from '@/users/entities/user.entity';
 import { UsersService } from '@/users/users.service';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { comparePassword } from '@/common/utils/hash.util';
@@ -45,6 +45,12 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    // check if user is active
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Account is not active');
+    }
+
     const isPasswordValid = await comparePassword(
       authInput.password,
       user.password,

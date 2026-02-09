@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MongooseModule } from '@nestjs/mongoose';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { join } from 'path';
 import databaseConfig from '../config/database.config';
 import { AppController } from './app.controller';
@@ -16,6 +16,8 @@ import { LgasModule } from './lgas/lgas.module';
 import { WardsModule } from './wards/wards.module';
 import { AuditModule } from './audit/audit.module';
 import { TokenRefreshInterceptor } from './auth/interceptors/token-refresh.interceptor';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { NotificationService } from './notifications/notifications.service';
 
 @Module({
   imports: [
@@ -76,9 +78,14 @@ import { TokenRefreshInterceptor } from './auth/interceptors/token-refresh.inter
   providers: [
     AppService,
     {
+      provide: APP_FILTER,
+      useClass: HttpExceptionFilter,
+    },
+    {
       provide: APP_INTERCEPTOR,
       useClass: TokenRefreshInterceptor,
     },
+    NotificationService,
   ],
 })
 export class AppModule {}
