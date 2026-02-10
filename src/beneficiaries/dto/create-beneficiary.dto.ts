@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
 } from 'class-validator';
 import { BeneficiaryType } from '../entities/beneficiary.entity';
@@ -12,8 +13,32 @@ import { BeneficiaryType } from '../entities/beneficiary.entity';
 export class CreateBeneficiaryDto {
   @IsString()
   @IsNotEmpty()
-  @MaxLength(100)
-  beneficiary_code: string;
+  @Matches(/^\d{10,12}$/, {
+    message: 'nidhh must be 10-12 digits',
+  })
+  nidhh: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  legacy_id: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^\d{10}$/, {
+    message: 'account_number must be exactly 10 digits',
+  })
+  account_number: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  bank: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  community: string;
 
   @IsEnum(BeneficiaryType)
   @IsNotEmpty()
@@ -39,9 +64,9 @@ export class CreateBeneficiaryDto {
   gender?: string;
 
   @IsString()
-  @IsOptional()
+  @IsNotEmpty()
   @MaxLength(20)
-  nin?: string;
+  nin: string;
 
   @IsString()
   @IsOptional()

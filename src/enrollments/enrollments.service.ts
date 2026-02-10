@@ -10,6 +10,7 @@ import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
 import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
 import { EnrollmentEntity } from './entities/enrollment.entity';
 import { UUID_REGEX } from '@/common/constants';
+import { PaginatedResponse } from '@/common/interfaces/paginated-response.interface';
 
 @Injectable()
 export class EnrollmentsService {
@@ -43,10 +44,25 @@ export class EnrollmentsService {
     return await this.enrollmentRepository.save(enrollment);
   }
 
-  async findAll(): Promise<EnrollmentEntity[]> {
-    return await this.enrollmentRepository.find({
+  async findAll(
+    limit = 10,
+    page = 1,
+  ): Promise<PaginatedResponse<EnrollmentEntity>> {
+    const [data, total] = await this.enrollmentRepository.findAndCount({
       relations: ['intervention', 'beneficiary'],
+      take: limit,
+      skip: (page - 1) * limit,
+      order: {
+        created_at: 'DESC',
+      },
     });
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+    };
   }
 
   async findByIntervention(

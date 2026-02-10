@@ -11,6 +11,7 @@ import { InterventionEntity } from '@/interventions/entities/intervention.entity
 import { InjectRepository } from '@nestjs/typeorm';
 import { LgaEntity } from '@/lgas/entities/lga.entity';
 import { UUID_REGEX } from '@/common/constants';
+import { PaginatedResponse } from '@/common/interfaces/paginated-response.interface';
 
 @Injectable()
 export class InterventionsService {
@@ -44,11 +45,25 @@ export class InterventionsService {
     return savedIntervention;
   }
 
-  async findAll() {
-    const interventions = await this.interventionRepository.find({
+  async findAll(
+    limit = 10,
+    page = 1,
+  ): Promise<PaginatedResponse<InterventionEntity>> {
+    const [data, total] = await this.interventionRepository.findAndCount({
       relations: ['lgas'],
+      take: limit,
+      skip: (page - 1) * limit,
+      order: {
+        created_at: 'DESC',
+      },
     });
-    return interventions;
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+    };
   }
 
   async findOne(id: string) {

@@ -27,8 +27,11 @@ export class BeneficiaryEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true, length: 100, nullable: false })
-  beneficiary_code: string;
+  @Column({ unique: true, length: 12, nullable: false })
+  nidhh: string;
+
+  @Column({ length: 255, nullable: false })
+  legacy_id: string;
 
   @Column({
     type: 'enum',
@@ -49,7 +52,7 @@ export class BeneficiaryEntity {
   @Column({ length: 50, nullable: true })
   gender: string;
 
-  @Column({ length: 20, nullable: true })
+  @Column({ length: 20, nullable: false })
   nin: string;
 
   @Column({ length: 20, nullable: true })
@@ -73,12 +76,21 @@ export class BeneficiaryEntity {
   @Column({ length: 100, nullable: true })
   ward: string;
 
+  @Column({ length: 255, nullable: false })
+  community: string;
+
   @Column({
     type: 'enum',
     enum: BeneficiaryStatus,
     default: BeneficiaryStatus.PENDING,
   })
   status: BeneficiaryStatus;
+
+  @Column({ length: 10, nullable: false })
+  account_number: string;
+
+  @Column({ length: 255, nullable: false })
+  bank: string;
 
   @CreateDateColumn()
   created_at: Date;

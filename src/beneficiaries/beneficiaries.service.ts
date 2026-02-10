@@ -10,6 +10,7 @@ import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { BeneficiaryEntity } from './entities/beneficiary.entity';
 import { UUID_REGEX } from '@/common/constants';
+import { PaginatedResponse } from '@/common/interfaces/paginated-response.interface';
 
 @Injectable()
 export class BeneficiariesService {
@@ -19,31 +20,60 @@ export class BeneficiariesService {
   ) {}
 
   async create(
-    createBeneficiaryDto: CreateBeneficiaryDto,
+    createBeneficiaryDtos: CreateBeneficiaryDto[],
     userId?: string,
-  ): Promise<BeneficiaryEntity> {
-    const existing = await this.beneficiaryRepository.findOne({
-      where: { beneficiary_code: createBeneficiaryDto.beneficiary_code },
-    });
+  ): Promise<BeneficiaryEntity[]> {
+    const nidhhValues = createBeneficiaryDtos.map((dto) => dto.nidhh);
+    const uniqueNidhhValues = [...new Set(nidhhValues)];
 
-    if (existing) {
-      throw new ConflictException('Beneficiary code already exists');
+    if (nidhhValues.length !== uniqueNidhhValues.length) {
+      throw new BadRequestException('Duplicate nidhh values in request');
     }
 
-    const beneficiary = this.beneficiaryRepository.create({
-      ...createBeneficiaryDto,
-      created_by: userId,
+    const existingBeneficiaries = await this.beneficiaryRepository.find({
+      where: nidhhValues.map((nidhh) => ({ nidhh })),
     });
 
-    return await this.beneficiaryRepository.save(beneficiary);
+    if (existingBeneficiaries.length > 0) {
+      const existingNidhhValues = existingBeneficiaries.map((b) => b.nidhh);
+      throw new ConflictException(
+        `Beneficiaries with nidhh already exist: ${existingNidhhValues.join(', ')}`,
+      );
+    }
+
+    const beneficiaries = createBeneficiaryDtos.map((dto) =>
+      this.beneficiaryRepository.create({
+        ...dto,
+        created_by: userId,
+      }),
+    );
+
+    return await this.beneficiaryRepository.save(beneficiaries);
   }
 
-  async findAll(includeDeleted = false): Promise<BeneficiaryEntity[]> {
-    const whereClause = includeDeleted ? {} : { deleted_at: IsNull() };
-    return await this.beneficiaryRepository.find({
+  async findAll(
+    includeDeleted = false,
+    limit = 10,
+    page = 1,
+  ): Promise<PaginatedResponse<BeneficiaryEntity>> {
+    const whereClause = includeDeleted ? undefined : { deleted_at: IsNull() };
+
+    const [data, total] = await this.beneficiaryRepository.findAndCount({
       where: whereClause,
       relations: ['enrollments'],
+      take: limit,
+      skip: (page - 1) * limit,
+      order: {
+        created_at: 'DESC',
+      },
     });
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+    };
   }
 
   async findOne(id: string): Promise<BeneficiaryEntity> {
@@ -74,15 +104,17 @@ export class BeneficiariesService {
     const beneficiary = await this.findOne(id);
 
     if (
-      updateBeneficiaryDto.beneficiary_code &&
-      updateBeneficiaryDto.beneficiary_code !== beneficiary.beneficiary_code
+      updateBeneficiaryDto.nidhh &&
+      updateBeneficiaryDto.nidhh !== beneficiary.nidhh
     ) {
       const existing = await this.beneficiaryRepository.findOne({
-        where: { beneficiary_code: updateBeneficiaryDto.beneficiary_code },
+        where: { nidhh: updateBeneficiaryDto.nidhh },
       });
 
       if (existing) {
-        throw new ConflictException('Beneficiary code already exists');
+        throw new ConflictException(
+          'Beneficiary with this nidhh already exists',
+        );
       }
     }
 

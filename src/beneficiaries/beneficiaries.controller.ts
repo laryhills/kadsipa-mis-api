@@ -21,10 +21,11 @@ export class BeneficiariesController {
   constructor(private readonly beneficiariesService: BeneficiariesService) {}
 
   @Post()
-  async create(@Body() createBeneficiaryDto: CreateBeneficiaryDto) {
-    const beneficiary =
-      await this.beneficiariesService.create(createBeneficiaryDto);
-    return createdResponse('Beneficiary created successfully', beneficiary);
+  async create(@Body() createBeneficiaryDtos: CreateBeneficiaryDto[]) {
+    const beneficiaries = await this.beneficiariesService.create(
+      createBeneficiaryDtos,
+    );
+    return createdResponse('Beneficiaries created successfully', beneficiaries);
   }
 
   @Get()
