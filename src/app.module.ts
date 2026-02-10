@@ -18,6 +18,7 @@ import { AuditModule } from './audit/audit.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { TasksModule } from './tasks/tasks.module';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
     WardsModule,
     AuditModule,
     NotificationsModule.forRoot(),
+    TasksModule,
   ],
   controllers: [AppController],
   providers: [

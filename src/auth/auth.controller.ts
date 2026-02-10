@@ -65,9 +65,7 @@ export class AuthController {
 
     const otp = await this.otpService.createOtp(user.id, OtpType.LOGIN);
 
-    if (process.env.NODE_ENV === 'production') {
-      await this.notificationService.sendOtpEmail(user.email, otp.code);
-    }
+    await this.notificationService.sendOtpEmail(user.email, otp.code);
 
     const message =
       process.env.NODE_ENV === 'production'

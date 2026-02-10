@@ -42,6 +42,10 @@ export class EmailProcessor extends WorkerHost {
 
   private async sendOtpEmail(data: SendOtpEmailJob): Promise<void> {
     try {
+      if (process.env.SEND_EMAILS === 'false') {
+        this.logger.log(`[DEV] OTP Code for ${data.email}: ${data.code}`);
+        return;
+      }
       await this.emailTransporter.sendMail({
         from:
           this.configService.get('SMTP_FROM_EMAIL') ||
