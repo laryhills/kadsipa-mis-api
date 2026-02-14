@@ -63,11 +63,8 @@ export class InterventionsService {
     );
   }
 
-  async findAll(
-    limit = 10,
-    page = 1,
-  ): Promise<PaginatedResponse<InterventionEntity>> {
-    const [data, total] = await this.interventionRepository.findAndCount({
+  async findAll(limit = 10, page = 1): Promise<PaginatedResponse<any>> {
+    const [results, total] = await this.interventionRepository.findAndCount({
       relations: ['lgas'],
       take: limit,
       skip: (page - 1) * limit,
@@ -75,6 +72,21 @@ export class InterventionsService {
         created_at: 'DESC',
       },
     });
+
+    const data = results.map((intervention) => ({
+      ...intervention,
+      lgas: intervention.lgas.map((lga) => lga.name),
+    }));
+
+    /*     const queryBuilder = this.interventionRepository
+      .createQueryBuilder('intervention')
+      .leftJoin('intervention.lgas', 'lgas')
+      .addSelect(['lgas.id', 'lgas.name'])
+      .take(limit)
+      .skip((page - 1) * limit)
+      .orderBy('intervention.created_at', 'DESC');
+
+    const [data, total] = await queryBuilder.getManyAndCount(); */
 
     return {
       data,
