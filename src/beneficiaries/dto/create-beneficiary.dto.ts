@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsDateString,
   IsEmail,
   IsEnum,
@@ -7,8 +8,10 @@ import {
   IsString,
   Matches,
   MaxLength,
+  ValidateNested,
 } from 'class-validator';
 import { BeneficiaryType } from '../entities/beneficiary.entity';
+import { Type } from 'class-transformer';
 
 export class CreateBeneficiaryDto {
   @IsString()
@@ -100,4 +103,12 @@ export class CreateBeneficiaryDto {
   @IsOptional()
   @MaxLength(100)
   ward?: string;
+}
+
+export class CreateBeneficiaryDtoArray {
+  @IsArray()
+  @IsNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => CreateBeneficiaryDto)
+  beneficiaries: CreateBeneficiaryDto[];
 }

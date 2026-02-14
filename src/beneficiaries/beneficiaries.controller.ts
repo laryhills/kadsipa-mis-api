@@ -10,7 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { BeneficiariesService } from './beneficiaries.service';
-import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
+import { CreateBeneficiaryDtoArray } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
 import { createdResponse, successResponse } from '@/common';
@@ -21,9 +21,9 @@ export class BeneficiariesController {
   constructor(private readonly beneficiariesService: BeneficiariesService) {}
 
   @Post()
-  async create(@Body() createBeneficiaryDtos: CreateBeneficiaryDto[]) {
+  async create(@Body() createBeneficiaryDtoArray: CreateBeneficiaryDtoArray) {
     const beneficiaries = await this.beneficiariesService.create(
-      createBeneficiaryDtos,
+      createBeneficiaryDtoArray.beneficiaries,
     );
     return createdResponse('Beneficiaries created successfully', beneficiaries);
   }

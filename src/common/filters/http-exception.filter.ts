@@ -52,10 +52,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const response = exception.getResponse();
+      const errors = (response as { errors?: string[] }).errors;
       const message =
-        typeof response === 'string'
-          ? response
-          : this.getMessageFromResponse(response);
+        errors && errors.length > 0
+          ? errors[0]
+          : typeof response === 'string'
+            ? response
+            : this.getMessageFromResponse(response);
       return { status, message };
     }
 
