@@ -35,14 +35,32 @@ export class InterventionsService {
       );
     }
 
-    const intervention = this.interventionRepository.create({
-      ...interventionData,
-      lgas,
-    });
+    const year = new Date(interventionData.start_date)
+      .getFullYear()
+      .toString()
+      .slice(-2);
 
-    const savedIntervention =
-      await this.interventionRepository.save(intervention);
-    return savedIntervention;
+    return await this.interventionRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const existingCount = await transactionalEntityManager
+          .createQueryBuilder(InterventionEntity, 'intervention')
+          .where('intervention.program_code LIKE :pattern', {
+            pattern: `KAD-INT-${year}-%`,
+          })
+          .getCount();
+
+        const sequenceNumber = (existingCount + 1).toString().padStart(3, '0');
+        const program_code = `KAD-INT-${year}-${sequenceNumber}`;
+
+        const intervention = this.interventionRepository.create({
+          ...interventionData,
+          lgas,
+          program_code,
+        });
+
+        return await transactionalEntityManager.save(intervention);
+      },
+    );
   }
 
   async findAll(
