@@ -22,6 +22,12 @@ export enum BeneficiaryStatus {
   ARCHIVED = 'archived',
 }
 
+export enum Gender {
+  MALE = 'Male',
+  FEMALE = 'Female',
+  OTHER = 'Other',
+}
+
 @Entity('beneficiaries')
 export class BeneficiaryEntity {
   @PrimaryGeneratedColumn('uuid')
@@ -49,8 +55,18 @@ export class BeneficiaryEntity {
   @Column({ type: 'date', nullable: true })
   date_of_birth: Date;
 
-  @Column({ length: 50, nullable: true })
-  gender: string;
+  @Column({
+    type: 'enum',
+    enum: Gender,
+    nullable: true,
+  })
+  gender: Gender;
+
+  @Column({ default: false, name: 'has_disability' })
+  hasDisability: boolean;
+
+  @Column({ length: 100, nullable: true, name: 'disability_type' })
+  disabilityType: string;
 
   @Column({ length: 20, nullable: false })
   nin: string;
@@ -63,9 +79,6 @@ export class BeneficiaryEntity {
 
   @Column({ length: 20, nullable: true })
   phone_number: string;
-
-  @Column({ length: 100, nullable: true })
-  disability_status: string;
 
   @Column({ type: 'text', nullable: true })
   address: string;

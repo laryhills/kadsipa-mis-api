@@ -6,18 +6,12 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Observable, tap } from 'rxjs';
-import { Request } from 'express';
+import { RequestWithUserInterface } from '@/common/interfaces/request-inteface';
 import {
   AUDIT_METADATA_KEY,
   AuditMetadata,
 } from '../decorators/audit.decorator';
 import { ActivityLogsService } from '../services/activity-logs.service';
-
-interface RequestWithUser extends Request {
-  user?: {
-    id: string;
-  };
-}
 
 interface HttpError extends Error {
   status?: number;
@@ -40,7 +34,9 @@ export class AuditInterceptor implements NestInterceptor {
       return next.handle();
     }
 
-    const request = context.switchToHttp().getRequest<RequestWithUser>();
+    const request = context
+      .switchToHttp()
+      .getRequest<RequestWithUserInterface>();
     const user = request.user;
     const ipAddress = this.extractIpAddress(request);
 
@@ -97,7 +93,7 @@ export class AuditInterceptor implements NestInterceptor {
     );
   }
 
-  private extractIpAddress(request: RequestWithUser): string {
+  private extractIpAddress(request: RequestWithUserInterface): string {
     const forwardedFor = request.headers['x-forwarded-for'];
     const forwardedForArray = Array.isArray(forwardedFor)
       ? forwardedFor

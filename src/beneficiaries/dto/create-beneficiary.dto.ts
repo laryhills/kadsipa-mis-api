@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEmail,
   IsEnum,
@@ -10,7 +11,7 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import { BeneficiaryType } from '../entities/beneficiary.entity';
+import { BeneficiaryType, Gender } from '../entities/beneficiary.entity';
 import { Type } from 'class-transformer';
 
 export class CreateBeneficiaryDto {
@@ -61,10 +62,18 @@ export class CreateBeneficiaryDto {
   @IsOptional()
   date_of_birth?: Date;
 
+  @IsEnum(Gender)
+  @IsOptional()
+  gender?: Gender;
+
+  @IsBoolean()
+  @IsOptional()
+  hasDisability?: boolean;
+
   @IsString()
   @IsOptional()
-  @MaxLength(50)
-  gender?: string;
+  @MaxLength(100)
+  disabilityType?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -84,11 +93,6 @@ export class CreateBeneficiaryDto {
   @IsOptional()
   @MaxLength(20)
   phone_number?: string;
-
-  @IsString()
-  @IsOptional()
-  @MaxLength(100)
-  disability_status?: string;
 
   @IsString()
   @IsOptional()

@@ -19,6 +19,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TasksModule } from './tasks/tasks.module';
+import { RolesModule } from './roles/roles.module';
 
 @Module({
   imports: [
@@ -58,9 +59,7 @@ import { TasksModule } from './tasks/tasks.module';
         password: configService.get('DATABASE_PASSWORD'),
         database: configService.get('DATABASE_NAME'),
         entities: [join(__dirname, '..', '**', '*.entity.{ts,js}')],
-        migrations: [join(__dirname, '..', '..', 'migrations', '*.{ts,js}')],
-        synchronize: false, // Using migrations instead of auto-sync
-        migrationsRun: process.env.NODE_ENV !== 'production', // Auto-run in development
+        synchronize: false,
       }),
       inject: [ConfigService],
     }),
@@ -84,6 +83,7 @@ import { TasksModule } from './tasks/tasks.module';
     AuditModule,
     NotificationsModule.forRoot(),
     TasksModule,
+    RolesModule,
   ],
   controllers: [AppController],
   providers: [
