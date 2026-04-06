@@ -8,9 +8,9 @@ import {
   Unique,
   UpdateDateColumn,
 } from 'typeorm';
-import { InterventionEntity } from '@/interventions/entities/intervention.entity';
-import { BeneficiaryEntity } from '@/beneficiaries/entities/beneficiary.entity';
-import { UserEntity } from '@/users/entities/user.entity';
+import { InterventionEntity } from '../../interventions/entities/intervention.entity';
+import { BeneficiaryEntity } from '../../beneficiaries/entities/beneficiary.entity';
+import { UserEntity } from '../../users/entities/user.entity';
 
 export enum EnrollmentStatus {
   PENDING = 'pending',

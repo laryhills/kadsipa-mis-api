@@ -20,10 +20,12 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prepare": "husky install",
     "typeorm": "typeorm-ts-node-commonjs -d config/data-source.ts",
-    "db:drop": "npm run typeorm schema:drop",
-    "db:create": "npm run typeorm migration:generate migrations/$npm_config_name",
-    "db:migrate": "npm run typeorm migration:run",
-    "db:revert": "npm run typeorm migration:revert"
+    "migration:generate": "npm run typeorm migration:generate",
+    "migration:create": "npm run typeorm migration:create",
+    "migration:run": "npm run typeorm migration:run",
+    "migration:revert": "npm run typeorm migration:revert",
+    "migration:show": "npm run typeorm migration:show",
+    "db:drop": "npm run typeorm schema:drop"
   },
   "lint-staged": {
     "*.{ts}": [

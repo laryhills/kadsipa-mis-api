@@ -6,7 +6,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { UserEntity } from '@/users/entities/user.entity';
+import { UserEntity } from '../../users/entities/user.entity';
 
 export enum OtpType {
   LOGIN = 'login',

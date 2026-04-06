@@ -59,8 +59,8 @@ import { TasksModule } from './tasks/tasks.module';
         database: configService.get('DATABASE_NAME'),
         entities: [join(__dirname, '..', '**', '*.entity.{ts,js}')],
         migrations: [join(__dirname, '..', '..', 'migrations', '*.{ts,js}')],
-        // TODO: set to false in production for migrations to work
-        synchronize: true, // must be false in production for migrations to work
+        synchronize: false, // Using migrations instead of auto-sync
+        migrationsRun: process.env.NODE_ENV !== 'production', // Auto-run in development
       }),
       inject: [ConfigService],
     }),

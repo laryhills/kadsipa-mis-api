@@ -8,8 +8,8 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { UserEntity } from '@/users/entities/user.entity';
-import { EnrollmentEntity } from '@/enrollments/entities/enrollment.entity';
+import { UserEntity } from '../../users/entities/user.entity';
+import { EnrollmentEntity } from '../../enrollments/entities/enrollment.entity';
 
 export enum BeneficiaryType {
   INDIVIDUAL = 'individual',

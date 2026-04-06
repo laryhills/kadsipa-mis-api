@@ -10,8 +10,8 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { StateEntity } from './state.entity';
-import { WardEntity } from '@/wards/entities/ward.entity';
-import { InterventionEntity } from '@/interventions/entities/intervention.entity';
+import { WardEntity } from '../../wards/entities/ward.entity';
+import { InterventionEntity } from '../../interventions/entities/intervention.entity';
 
 @Entity('lgas')
 export class LgaEntity {

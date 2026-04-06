@@ -7,7 +7,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { hashPassword } from '@/common/utils/hash.util';
+import { hashPassword } from '../../common/utils/hash.util';
 
 export enum UserStatus {
   ACTIVE = 'active',

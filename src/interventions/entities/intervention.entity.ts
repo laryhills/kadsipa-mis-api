@@ -8,8 +8,8 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { EnrollmentEntity } from '@/enrollments/entities/enrollment.entity';
-import { LgaEntity } from '@/lgas/entities/lga.entity';
+import { EnrollmentEntity } from '../../enrollments/entities/enrollment.entity';
+import { LgaEntity } from '../../lgas/entities/lga.entity';
 
 export enum InterventionStatus {
   PENDING = 'pending',
