@@ -25,4 +25,9 @@ export class InviteUserDto {
   @IsArray()
   @IsUUID('4', { each: true })
   roleIds?: string[];
+
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }: { value: string }) => value?.trim())
+  personalMessage?: string;
 }

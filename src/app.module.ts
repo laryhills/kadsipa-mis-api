@@ -20,6 +20,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TasksModule } from './tasks/tasks.module';
 import { RolesModule } from './roles/roles.module';
+// import { BudgetLinesModule } from './budget-lines/budget-lines.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -84,6 +86,8 @@ import { RolesModule } from './roles/roles.module';
     NotificationsModule.forRoot(),
     TasksModule,
     RolesModule,
+    // BudgetLinesModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [
