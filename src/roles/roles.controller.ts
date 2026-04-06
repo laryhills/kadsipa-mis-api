@@ -72,7 +72,8 @@ export class RolesController {
     @Param('id') id: string,
     @Body('permissions') permissions: RolePermissions,
   ) {
-    const role = await this.rolesService.update(id, { permissions });
+    const updateDto: UpdateRoleDto = { permissions };
+    const role = await this.rolesService.update(id, updateDto);
     return {
       success: true,
       message: 'Role permissions updated successfully',
