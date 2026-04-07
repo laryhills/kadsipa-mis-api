@@ -26,6 +26,7 @@ import { DisbursementsModule } from './disbursements/disbursements.module';
 import { FiscalYearsModule } from './fiscal-years/fiscal-years.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { FundRequestsModule } from './fund-requests/fund-requests.module';
+import { DataReviewModule } from './data-review/data-review.module';
 
 @Module({
   imports: [
@@ -96,6 +97,7 @@ import { FundRequestsModule } from './fund-requests/fund-requests.module';
     FundRequestsModule,
     MailModule,
     DisbursementsModule,
+    DataReviewModule,
   ],
   controllers: [AppController],
   providers: [

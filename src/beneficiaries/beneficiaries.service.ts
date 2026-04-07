@@ -9,8 +9,8 @@ import { IsNull, Repository } from 'typeorm';
 import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { BeneficiaryEntity } from './entities/beneficiary.entity';
-import { UUID_REGEX } from '@/common/constants';
-import { PaginatedResponse } from '@/common/interfaces/paginated-response.interface';
+import { UUID_REGEX } from '../common/constants';
+import { PaginatedResponse } from '../common/interfaces/paginated-response.interface';
 
 @Injectable()
 export class BeneficiariesService {
@@ -91,6 +91,46 @@ export class BeneficiariesService {
     }
 
     return beneficiary;
+  }
+
+  async findByNIN(nin: string): Promise<BeneficiaryEntity | null> {
+    const beneficiary = await this.beneficiaryRepository.findOne({
+      where: { nidhh: nin, deleted_at: IsNull() },
+    });
+
+    return beneficiary;
+  }
+
+  async createOne(
+    createBeneficiaryDto: CreateBeneficiaryDto | Record<string, string>,
+    userId?: string,
+  ): Promise<BeneficiaryEntity> {
+    const nin =
+      'nidhh' in createBeneficiaryDto
+        ? createBeneficiaryDto.nidhh
+        : 'nin' in createBeneficiaryDto
+          ? createBeneficiaryDto.nin
+          : undefined;
+
+    if (!nin) {
+      throw new BadRequestException('NIN/NIDHH is required');
+    }
+
+    const existing = await this.beneficiaryRepository.findOne({
+      where: { nidhh: nin },
+    });
+
+    if (existing) {
+      throw new ConflictException('Beneficiary with this NIN already exists');
+    }
+
+    const beneficiary = this.beneficiaryRepository.create({
+      ...createBeneficiaryDto,
+      nidhh: nin,
+      created_by: userId,
+    });
+
+    return await this.beneficiaryRepository.save(beneficiary);
   }
 
   async update(

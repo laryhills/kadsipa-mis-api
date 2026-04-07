@@ -21,7 +21,7 @@ export class CreateDisbursementDto {
   budgetLineId: string;
 
   @IsNumber()
-  @Min(0.01)
+  @Min(0.0)
   amount: number;
 
   @IsString()

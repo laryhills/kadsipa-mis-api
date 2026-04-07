@@ -7,11 +7,11 @@ import {
 import { CreateInterventionDto } from './dto/create-intervention.dto';
 import { UpdateInterventionDto } from './dto/update-intervention.dto';
 import { In, IsNull, Repository } from 'typeorm';
-import { InterventionEntity } from '@/interventions/entities/intervention.entity';
+import { InterventionEntity } from './entities/intervention.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LgaEntity } from '@/lgas/entities/lga.entity';
-import { UUID_REGEX } from '@/common/constants';
-import { PaginatedResponse } from '@/common/interfaces/paginated-response.interface';
+import { LgaEntity } from '../lgas/entities/lga.entity';
+import { UUID_REGEX } from '../common/constants';
+import { PaginatedResponse } from '../common/interfaces/paginated-response.interface';
 
 @Injectable()
 export class InterventionsService {
@@ -165,5 +165,19 @@ export class InterventionsService {
 
     await this.interventionRepository.softDelete(intervention.id);
     return intervention;
+  }
+
+  async updateFormSchema(
+    id: string,
+    formSchema: Record<string, unknown>,
+  ): Promise<InterventionEntity> {
+    const intervention = await this.findOne(id);
+    intervention.formSchema = formSchema;
+    return await this.interventionRepository.save(intervention);
+  }
+
+  async getFormSchema(id: string): Promise<Record<string, unknown>> {
+    const intervention = await this.findOne(id);
+    return intervention.formSchema || {};
   }
 }

@@ -9,8 +9,8 @@ import { Repository } from 'typeorm';
 import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
 import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
 import { EnrollmentEntity } from './entities/enrollment.entity';
-import { UUID_REGEX } from '@/common/constants';
-import { PaginatedResponse } from '@/common/interfaces/paginated-response.interface';
+import { UUID_REGEX } from '../common/constants';
+import { PaginatedResponse } from '../common/interfaces/paginated-response.interface';
 
 @Injectable()
 export class EnrollmentsService {
@@ -89,13 +89,35 @@ export class EnrollmentsService {
     });
   }
 
-  async findOne(id: string): Promise<EnrollmentEntity> {
-    if (!UUID_REGEX.test(id)) {
+  async findOne(
+    beneficiaryIdOrEnrollmentId: string,
+    interventionId?: string,
+  ): Promise<EnrollmentEntity | null> {
+    if (interventionId) {
+      if (
+        !UUID_REGEX.test(beneficiaryIdOrEnrollmentId) ||
+        !UUID_REGEX.test(interventionId)
+      ) {
+        throw new BadRequestException('Invalid beneficiary or intervention ID');
+      }
+
+      const enrollment = await this.enrollmentRepository.findOne({
+        where: {
+          beneficiary_id: beneficiaryIdOrEnrollmentId,
+          intervention_id: interventionId,
+        },
+        relations: ['intervention', 'beneficiary'],
+      });
+
+      return enrollment;
+    }
+
+    if (!UUID_REGEX.test(beneficiaryIdOrEnrollmentId)) {
       throw new BadRequestException('Invalid enrollment ID');
     }
 
     const enrollment = await this.enrollmentRepository.findOne({
-      where: { id },
+      where: { id: beneficiaryIdOrEnrollmentId },
       relations: ['intervention', 'beneficiary'],
     });
 

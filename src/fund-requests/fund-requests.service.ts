@@ -215,6 +215,13 @@ export class FundRequestsService {
       );
     }
 
+    // Validate approved amount doesn't exceed requested amount
+    if (approveDto.approvedAmount > fundRequest.requestedAmount) {
+      throw new BadRequestException(
+        `Approved amount (${approveDto.approvedAmount}) cannot exceed requested amount (${fundRequest.requestedAmount})`,
+      );
+    }
+
     const budgetLine = await this.budgetLineRepository.findOne({
       where: { id: fundRequest.budgetLine.id },
     });
@@ -239,13 +246,14 @@ export class FundRequestsService {
     fundRequest.approvedAt = new Date();
     fundRequest.notes = approveDto.notes || fundRequest.notes;
 
-    budgetLine.committedAmount += approveDto.approvedAmount;
+    // Update budget line committed amount
+    budgetLine.committedAmount =
+      Number(budgetLine.committedAmount) + Number(approveDto.approvedAmount);
     budgetLine.remainingAmount =
-      budgetLine.allocatedAmount - budgetLine.spentAmount;
-
-    await this.budgetLineRepository.save(budgetLine);
+      Number(budgetLine.allocatedAmount) - Number(budgetLine.committedAmount);
 
     if (fundRequest.intervention) {
+      // Intervention-linked fund request: funds flow to intervention for later disbursement
       const intervention = await this.interventionRepository.findOne({
         where: { id: fundRequest.intervention.id },
       });
@@ -256,9 +264,20 @@ export class FundRequestsService {
         );
       }
 
-      intervention.budgetReceived += approveDto.approvedAmount;
+      intervention.budgetReceived =
+        Number(intervention.budgetReceived) + Number(approveDto.approvedAmount);
       await this.interventionRepository.save(intervention);
+    } else {
+      // Non-intervention fund request (e.g., Stationery Procurement, Vehicle Maintenance)
+      // These are automatically marked as spent upon approval since they represent
+      // direct operational expenses not tied to beneficiary disbursements.
+      budgetLine.spentAmount =
+        Number(budgetLine.spentAmount) + Number(approveDto.approvedAmount);
+      budgetLine.remainingAmount =
+        Number(budgetLine.allocatedAmount) - Number(budgetLine.committedAmount);
     }
+
+    await this.budgetLineRepository.save(budgetLine);
 
     return this.fundRequestRepository.save(fundRequest);
   }

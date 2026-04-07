@@ -5,14 +5,11 @@ import {
   JoinTable,
   ManyToMany,
   OneToMany,
-  ManyToOne,
-  JoinColumn,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { EnrollmentEntity } from '../../enrollments/entities/enrollment.entity';
 import { LgaEntity } from '../../lgas/entities/lga.entity';
-import { BudgetLineEntity } from '../../budget-lines/entities/budget-line.entity';
 import { FundRequestEntity } from '../../fund-requests/entities/fund-request.entity';
 
 export enum InterventionStatus {
@@ -88,10 +85,6 @@ export class InterventionEntity {
     nullable: true,
   })
   reportFrequency: ReportFrequency;
-
-  @ManyToOne(() => BudgetLineEntity, { nullable: true })
-  @JoinColumn({ name: 'budget_line_id' })
-  budgetLine: BudgetLineEntity;
 
   @Column({
     type: 'decimal',

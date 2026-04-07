@@ -2,14 +2,21 @@ import {
   ArrayMinSize,
   IsArray,
   IsDateString,
-  IsIn,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsNumber,
+  IsOptional,
   IsPositive,
   IsString,
+  IsUUID,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import {
+  FundingSource,
+  InterventionType,
+  ReportFrequency,
+} from '../entities/intervention.entity';
 
 export class CreateInterventionDto {
   @IsNotEmpty({ message: 'Name is required' })
@@ -23,15 +30,27 @@ export class CreateInterventionDto {
   @Transform(({ value }) => Number(value))
   budget_allocated: number;
 
-  @IsString()
-  @IsNotEmpty({ message: 'Funding source is required' })
-  @Transform(({ value }: { value: string }) => value.trim())
-  // must be in [lg, sa]
-  @IsIn(['Local Government', 'World Bank', 'DFID', 'FAO'], {
-    message:
-      'Funding source must be either Local Government, World Bank, DFID, or FAO',
+  @IsEnum(FundingSource, {
+    message: `Funding source must be one of: ${Object.values(FundingSource).join(', ')}`,
   })
-  funding_source: string;
+  @IsNotEmpty({ message: 'Funding source is required' })
+  funding_source: FundingSource;
+
+  @IsEnum(InterventionType, {
+    message: `Intervention type must be one of: ${Object.values(InterventionType).join(', ')}`,
+  })
+  @IsOptional()
+  intervention_type?: InterventionType;
+
+  @IsEnum(ReportFrequency, {
+    message: `Report frequency must be one of: ${Object.values(ReportFrequency).join(', ')}`,
+  })
+  @IsOptional()
+  report_frequency?: ReportFrequency;
+
+  @IsUUID()
+  @IsOptional()
+  budget_line_id?: string;
 
   @IsDateString()
   @IsNotEmpty({ message: 'Start date is required' })

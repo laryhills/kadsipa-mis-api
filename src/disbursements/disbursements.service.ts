@@ -37,11 +37,12 @@ export class DisbursementsService {
       createDisbursementDto.budgetLineId,
     );
 
-    if (
-      Number(budgetLine.remainingAmount) < Number(createDisbursementDto.amount)
-    ) {
+    // Validate intervention has sufficient funds (budgetReceived - budgetSpent)
+    const interventionAvailable =
+      Number(intervention.budgetReceived) - Number(intervention.budgetSpent);
+    if (Number(createDisbursementDto.amount) > interventionAvailable) {
       throw new BadRequestException(
-        `Insufficient budget remaining. Available: ₦${budgetLine.remainingAmount}, Requested: ₦${createDisbursementDto.amount}`,
+        `Insufficient intervention budget. Available: ₦${interventionAvailable}, Requested: ₦${createDisbursementDto.amount}`,
       );
     }
 
@@ -67,12 +68,22 @@ export class DisbursementsService {
     };
 
     const disbursement = this.disbursementRepository.create(disbursementData);
-    const savedDisbursement = (await this.disbursementRepository.save(disbursement)) as DisbursementEntity;
+    const savedDisbursement = (await this.disbursementRepository.save(
+      disbursement,
+    )) as DisbursementEntity;
 
+    // Update budget line spent amount
     await this.budgetLinesService.recordSpending(
       budgetLine.id,
       createDisbursementDto.amount,
     );
+
+    // Update intervention spent amount
+    intervention.budgetSpent =
+      Number(intervention.budgetSpent) + Number(createDisbursementDto.amount);
+    await this.interventionsService.update(intervention.id, {
+      budgetSpent: intervention.budgetSpent,
+    } as any);
 
     return await this.findOne(savedDisbursement.id);
   }
@@ -93,9 +104,12 @@ export class DisbursementsService {
       0,
     );
 
-    if (Number(budgetLine.remainingAmount) < totalAmount) {
+    // Validate intervention has sufficient funds (budgetReceived - budgetSpent)
+    const interventionAvailable =
+      Number(intervention.budgetReceived) - Number(intervention.budgetSpent);
+    if (totalAmount > interventionAvailable) {
       throw new BadRequestException(
-        `Insufficient budget remaining. Available: ₦${budgetLine.remainingAmount}, Required: ₦${totalAmount}`,
+        `Insufficient intervention budget. Available: ₦${interventionAvailable}, Required: ₦${totalAmount}`,
       );
     }
 
@@ -116,19 +130,29 @@ export class DisbursementsService {
         status: DisbursementStatus.PAID,
         paymentDate: new Date(),
         bankName: item.bankName || beneficiary.bank || undefined,
-        accountNumber: item.accountNumber || beneficiary.account_number || undefined,
+        accountNumber:
+          item.accountNumber || beneficiary.account_number || undefined,
         referenceNumber: createBatchDto.referenceNumber || undefined,
         notes: item.notes || undefined,
         createdBy: { id: userId } as any,
       };
 
-      const disbursement = this.disbursementRepository.create(disbursementData);
+      const disbursement =
+        this.disbursementRepository.create(disbursementData);
       disbursements.push(disbursement);
     }
 
     await this.disbursementRepository.save(disbursements);
 
+    // Update budget line spent amount
     await this.budgetLinesService.recordSpending(budgetLine.id, totalAmount);
+
+    // Update intervention spent amount
+    intervention.budgetSpent =
+      Number(intervention.budgetSpent) + Number(totalAmount);
+    await this.interventionsService.update(intervention.id, {
+      budgetSpent: intervention.budgetSpent,
+    } as any);
 
     return await this.disbursementRepository.find({
       where: { batchNumber },
