@@ -17,6 +17,7 @@ import { UUID_REGEX } from '../common/constants';
 import * as crypto from 'crypto';
 import { comparePassword } from '../common/utils/hash.util';
 import { RolesService } from '@/roles/roles.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class UsersService {
@@ -26,6 +27,7 @@ export class UsersService {
     @InjectRepository(UserRoleEntity)
     private readonly userRoleRepository: Repository<UserRoleEntity>,
     private readonly rolesService: RolesService,
+    private readonly mailService: MailService,
   ) {}
 
   async create(
@@ -93,6 +95,13 @@ export class UsersService {
         await this.assignRole(savedUser.id, roleId, invitedBy);
       }
     }
+
+    await this.mailService.sendUserInvitation(
+      savedUser.email,
+      savedUser.full_name,
+      temporaryPassword,
+      inviteUserDto.personalMessage,
+    );
 
     return {
       user: {

@@ -20,8 +20,12 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TasksModule } from './tasks/tasks.module';
 import { RolesModule } from './roles/roles.module';
-// import { BudgetLinesModule } from './budget-lines/budget-lines.module';
+import { BudgetLinesModule } from './budget-lines/budget-lines.module';
 import { MailModule } from './mail/mail.module';
+import { DisbursementsModule } from './disbursements/disbursements.module';
+import { FiscalYearsModule } from './fiscal-years/fiscal-years.module';
+import { DepartmentsModule } from './departments/departments.module';
+import { FundRequestsModule } from './fund-requests/fund-requests.module';
 
 @Module({
   imports: [
@@ -86,8 +90,12 @@ import { MailModule } from './mail/mail.module';
     NotificationsModule.forRoot(),
     TasksModule,
     RolesModule,
-    // BudgetLinesModule,
+    FiscalYearsModule,
+    DepartmentsModule,
+    BudgetLinesModule,
+    FundRequestsModule,
     MailModule,
+    DisbursementsModule,
   ],
   controllers: [AppController],
   providers: [

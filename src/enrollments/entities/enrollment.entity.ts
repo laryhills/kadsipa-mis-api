@@ -70,6 +70,9 @@ export class EnrollmentEntity {
   @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
   allocation_amount: number;
 
+  @Column({ type: 'jsonb', nullable: true, name: 'custom_data' })
+  customData: Record<string, unknown>;
+
   @CreateDateColumn()
   created_at: Date;
 

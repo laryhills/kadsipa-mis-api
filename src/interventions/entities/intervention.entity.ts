@@ -5,16 +5,47 @@ import {
   JoinTable,
   ManyToMany,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { EnrollmentEntity } from '../../enrollments/entities/enrollment.entity';
 import { LgaEntity } from '../../lgas/entities/lga.entity';
+import { BudgetLineEntity } from '../../budget-lines/entities/budget-line.entity';
+import { FundRequestEntity } from '../../fund-requests/entities/fund-request.entity';
 
 export enum InterventionStatus {
-  PENDING = 'pending',
-  IN_PROGRESS = 'in_progress',
+  DRAFT = 'draft',
+  ACTIVE = 'active',
   COMPLETED = 'completed',
+  SUSPENDED = 'suspended',
+}
+
+export enum FundingSource {
+  FEDERAL = 'Federal',
+  STATE_GOVERNMENT = 'State Government',
+  NGO = 'NGO',
+  INTERNATIONAL_DONOR = 'International Donor',
+  PRIVATE_SECTOR = 'Private Sector',
+}
+
+export enum InterventionType {
+  CASH_TRANSFER = 'Cash Transfer',
+  FOOD_AID = 'Food Aid',
+  SKILLS_TRAINING = 'Skills Training',
+  HEALTHCARE_SUPPORT = 'Healthcare Support',
+  EDUCATION_SUPPORT = 'Education Support',
+  AGRICULTURAL = 'Agricultural',
+  INFRASTRUCTURE = 'Infrastructure',
+  OTHER = 'Other',
+}
+
+export enum ReportFrequency {
+  WEEKLY = 'Weekly',
+  MONTHLY = 'Monthly',
+  QUARTERLY = 'Quarterly',
+  ANNUALLY = 'Annually',
 }
 
 @Entity('interventions')
@@ -34,16 +65,68 @@ export class InterventionEntity {
   @Column({ nullable: true })
   program_type: string;
 
-  @Column({ type: 'decimal', precision: 13, scale: 2, nullable: false })
+  @Column({
+    type: 'enum',
+    enum: InterventionType,
+    name: 'intervention_type',
+    nullable: true,
+  })
+  interventionType: InterventionType;
+
+  @Column({
+    type: 'enum',
+    enum: FundingSource,
+    name: 'funding_source',
+    nullable: false,
+  })
+  fundingSource: FundingSource;
+
+  @Column({
+    type: 'enum',
+    enum: ReportFrequency,
+    name: 'report_frequency',
+    nullable: true,
+  })
+  reportFrequency: ReportFrequency;
+
+  @ManyToOne(() => BudgetLineEntity, { nullable: true })
+  @JoinColumn({ name: 'budget_line_id' })
+  budgetLine: BudgetLineEntity;
+
+  @Column({
+    type: 'decimal',
+    precision: 15,
+    scale: 2,
+    nullable: false,
+    default: 0,
+  })
   budget_allocated: number;
 
-  @Column({ nullable: false })
-  funding_source: string;
+  @Column({
+    type: 'decimal',
+    precision: 15,
+    scale: 2,
+    name: 'budget_received',
+    default: 0,
+  })
+  budgetReceived: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 15,
+    scale: 2,
+    name: 'budget_spent',
+    default: 0,
+  })
+  budgetSpent: number;
+
+  @Column({ type: 'jsonb', nullable: true, name: 'form_schema' })
+  formSchema: Record<string, unknown>;
 
   @Column({
     type: 'enum',
     enum: InterventionStatus,
-    default: InterventionStatus.PENDING,
+    default: InterventionStatus.DRAFT,
   })
   status: InterventionStatus;
 
@@ -64,6 +147,9 @@ export class InterventionEntity {
 
   @OneToMany(() => EnrollmentEntity, (enrollment) => enrollment.intervention)
   enrollments: EnrollmentEntity[];
+
+  @OneToMany(() => FundRequestEntity, (fundRequest) => fundRequest.intervention)
+  fundRequests: FundRequestEntity[];
 
   @ManyToMany(() => LgaEntity, (lga) => lga.interventions)
   @JoinTable({

@@ -9,5 +9,6 @@ import { LgaEntity } from '@/lgas/entities/lga.entity';
   imports: [TypeOrmModule.forFeature([InterventionEntity, LgaEntity])],
   controllers: [InterventionsController],
   providers: [InterventionsService],
+  exports: [InterventionsService],
 })
 export class InterventionsModule {}
