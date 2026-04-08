@@ -1,0 +1,60 @@
+# Dependency directories
+node_modules/
+.pnp/
+.pnp.js
+vendor/
+packages/
+
+# Build artifacts
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+.vite/
+.turbo/
+
+# Tests and coverage
+coverage/
+.nyc_output/
+*.spec.js
+*.test.js
+__tests__/
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Environment config (security consideration)
+.env
+.env.local
+.env.*.local
+credentials.json
+*.key
+*.pem
+
+# Version control
+.git/
+.svn/
+.hg/
+
+# IDE config (optional)
+.vscode/
+.idea/
+*.sublime-*
+
+# Large resource files (adjust as needed)
+# *.mp4
+# *.mov
+# *.avi
+# *.zip
+# *.tar.gz
+# *.pdf
+# public/videos/
