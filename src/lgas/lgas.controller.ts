@@ -3,7 +3,7 @@ import { LgasService } from './lgas.service';
 import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
 import { successResponse } from '@/common';
 
-@Controller('lgas')
+@Controller({ version: '1', path: 'lgas' })
 @UseGuards(PassportJwtGuard)
 export class LgasController {
   constructor(private readonly lgasService: LgasService) {}

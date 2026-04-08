@@ -25,7 +25,7 @@ import { DisbursementsService } from '../disbursements/disbursements.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
-@Controller('interventions')
+@Controller({ version: '1', path: 'interventions' })
 @UseGuards(PassportJwtGuard, RolesGuard)
 export class InterventionsController {
   constructor(

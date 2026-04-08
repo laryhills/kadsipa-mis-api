@@ -7,7 +7,7 @@ export class ActivityLog extends Document {
   @Prop({ required: false })
   userId?: string;
 
-  @Prop({ required: false })
+  @Prop({ type: String, enum: ActivityType, required: false })
   activityType?: ActivityType;
 
   @Prop({ required: false })

@@ -15,7 +15,7 @@ import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
 import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
 import { createdResponse, successResponse } from '@/common';
 
-@Controller('enrollments')
+@Controller({ version: '1', path: 'enrollments' })
 @UseGuards(PassportJwtGuard)
 export class EnrollmentsController {
   constructor(private readonly enrollmentsService: EnrollmentsService) {}

@@ -21,7 +21,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { createdResponse, successResponse } from '../common';
 
-@Controller('finance/budget-lines')
+@Controller({ version: '1', path: 'finance/budget-lines' })
 @UseGuards(PassportJwtGuard, RolesGuard)
 export class BudgetLinesController {
   constructor(private readonly budgetLinesService: BudgetLinesService) {}

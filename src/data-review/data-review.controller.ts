@@ -26,7 +26,7 @@ import { BulkRejectDto } from './dto/bulk-reject.dto';
 import { PendingBeneficiaryStatus } from './entities/pending-beneficiary.entity';
 import { successResponse } from '../common';
 
-@Controller('data-review')
+@Controller({ version: '1', path: 'data-review' })
 @UseGuards(PassportJwtGuard, RolesGuard)
 export class DataReviewController {
   constructor(private readonly dataReviewService: DataReviewService) {}

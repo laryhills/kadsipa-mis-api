@@ -22,7 +22,7 @@ import { RequirePermission } from '../auth/decorators/require-permission.decorat
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
-@Controller('users')
+@Controller({ version: '1', path: 'users' })
 @UseGuards(PassportJwtGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}

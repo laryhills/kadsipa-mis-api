@@ -30,7 +30,7 @@ import { TooManyRequestsException } from '@/common/exceptions/too-many-requests.
 
 export type RequestWithUser = ExpressRequest & { user: LoginData };
 
-@Controller('auth')
+@Controller({ version: '1', path: 'auth' })
 export class AuthController {
   constructor(
     private readonly authService: AuthService,

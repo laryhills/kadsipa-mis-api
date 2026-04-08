@@ -14,7 +14,7 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { UploadNotificationsService } from './upload-notifications.service';
 import { successResponse } from '../common';
 
-@Controller('notifications')
+@Controller({ version: '1', path: 'notifications' })
 @UseGuards(PassportJwtGuard, RolesGuard)
 export class UploadNotificationsController {
   constructor(

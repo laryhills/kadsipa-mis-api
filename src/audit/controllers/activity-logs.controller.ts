@@ -4,7 +4,7 @@ import { QueryActivityLogDto } from '../dto/query-activity-log.dto';
 import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
 import { successResponse } from '@/common';
 
-@Controller('activity-logs')
+@Controller({ version: '1', path: 'activity-logs' })
 @UseGuards(PassportJwtGuard)
 export class ActivityLogsController {
   constructor(private readonly activityLogsService: ActivityLogsService) {}

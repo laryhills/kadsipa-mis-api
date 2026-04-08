@@ -19,7 +19,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { createdResponse, successResponse } from '../common';
 
-@Controller('roles')
+@Controller({ version: '1', path: 'roles' })
 @UseGuards(PassportJwtGuard, RolesGuard)
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}

@@ -23,7 +23,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { createdResponse, successResponse } from '../common';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
-@Controller('finance/fund-requests')
+@Controller({ version: '1', path: 'finance/fund-requests' })
 @UseGuards(PassportJwtGuard, RolesGuard)
 export class FundRequestsController {
   constructor(private readonly fundRequestsService: FundRequestsService) {}

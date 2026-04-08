@@ -16,7 +16,7 @@ import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
 import { createdResponse, successResponse } from '@/common';
 import { RequirePermission } from '@/auth/decorators/require-permission.decorator';
 
-@Controller('beneficiaries')
+@Controller({ version: '1', path: 'beneficiaries' })
 @UseGuards(PassportJwtGuard)
 export class BeneficiariesController {
   constructor(private readonly beneficiariesService: BeneficiariesService) {}

@@ -22,7 +22,7 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { DisbursementStatus } from './entities/disbursement.entity';
 import { createdResponse, successResponse } from '../common';
 
-@Controller('disbursements')
+@Controller({ version: '1', path: 'disbursements' })
 @UseGuards(PassportJwtGuard, RolesGuard)
 export class DisbursementsController {
   constructor(private readonly disbursementsService: DisbursementsService) {}

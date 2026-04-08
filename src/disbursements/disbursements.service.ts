@@ -15,7 +15,7 @@ import { CreateBatchDisbursementDto } from './dto/create-batch-disbursement.dto'
 import { UpdateDisbursementStatusDto } from './dto/update-disbursement-status.dto';
 import { BeneficiariesService } from '../beneficiaries/beneficiaries.service';
 import { InterventionsService } from '../interventions/interventions.service';
-import { EnrollmentsService } from '@/enrollments/enrollments.service';
+import { EnrollmentsService } from '../enrollments/enrollments.service';
 import {
   FundRequestEntity,
   FundRequestStatus,

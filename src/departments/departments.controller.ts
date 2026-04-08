@@ -18,7 +18,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { createdResponse, successResponse } from '../common';
 
-@Controller('finance/departments')
+@Controller({ version: '1', path: 'finance/departments' })
 @UseGuards(PassportJwtGuard, RolesGuard)
 export class DepartmentsController {
   constructor(private readonly departmentsService: DepartmentsService) {}

@@ -18,7 +18,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { createdResponse, successResponse } from '../common';
 
-@Controller('fiscal-years')
+@Controller({ version: '1', path: 'fiscal-years' })
 @UseGuards(PassportJwtGuard, RolesGuard)
 export class FiscalYearsController {
   constructor(private readonly fiscalYearsService: FiscalYearsService) {}
