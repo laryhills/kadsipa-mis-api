@@ -81,6 +81,7 @@ export class NotificationsModule implements OnModuleInit {
 
     return {
       module: NotificationsModule,
+      global: true,
       imports: [...baseImports, ...bullBoardImports],
       controllers: [NotificationsController, UploadNotificationsController],
       providers: [

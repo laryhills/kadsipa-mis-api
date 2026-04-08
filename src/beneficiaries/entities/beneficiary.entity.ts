@@ -36,7 +36,7 @@ export class BeneficiaryEntity {
   @Column({ unique: true, length: 12, nullable: false })
   nidhh: string;
 
-  @Column({ length: 255, nullable: false })
+  @Column({ length: 255, nullable: true })
   legacy_id: string;
 
   @Column({
@@ -101,6 +101,9 @@ export class BeneficiaryEntity {
 
   @Column({ length: 10, nullable: false })
   account_number: string;
+
+  @Column({ length: 255, nullable: true })
+  account_name: string;
 
   @Column({ length: 255, nullable: false })
   bank: string;

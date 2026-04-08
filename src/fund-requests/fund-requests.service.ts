@@ -15,7 +15,6 @@ import { ApproveFundRequestDto } from './dto/approve-fund-request.dto';
 import { RejectFundRequestDto } from './dto/reject-fund-request.dto';
 import { BudgetLineEntity } from '../budget-lines/entities/budget-line.entity';
 import { InterventionEntity } from '../interventions/entities/intervention.entity';
-import { UserEntity } from '@/users/entities/user.entity';
 
 @Injectable()
 export class FundRequestsService {
@@ -68,49 +67,34 @@ export class FundRequestsService {
       justification: createDto.justification,
       supportingDocuments: createDto.supportingDocuments,
       notes: createDto.notes,
-      budgetLine: { id: createDto.budgetLineId } as BudgetLineEntity,
-      requestedBy: { id: userId } as UserEntity,
+      budgetLineId: createDto.budgetLineId,
+      interventionId: createDto.interventionId,
+      requestedById: userId,
     });
-
-    if (createDto.interventionId) {
-      fundRequest.intervention = {
-        id: createDto.interventionId,
-      } as InterventionEntity;
-    }
 
     return this.fundRequestRepository.save(fundRequest);
   }
 
   async findAll(fiscalYearId?: string): Promise<FundRequestEntity[]> {
-    let targetFiscalYearId = fiscalYearId;
-
-    // If no fiscal year provided, get the latest active one
-    if (!targetFiscalYearId) {
-      const latestFiscalYear = await this.fundRequestRepository.manager
-        .getRepository('FiscalYearEntity')
-        .findOne({
-          where: { isActive: true },
-          order: { startDate: 'DESC' },
-        });
-
-      if (latestFiscalYear) {
-        targetFiscalYearId = latestFiscalYear.id;
-      }
-    }
-
     const queryBuilder = this.fundRequestRepository
       .createQueryBuilder('fundRequest')
       .leftJoinAndSelect('fundRequest.budgetLine', 'budgetLine')
       .leftJoinAndSelect('budgetLine.fiscalYear', 'fiscalYear')
       .leftJoinAndSelect('budgetLine.department', 'department')
       .leftJoinAndSelect('fundRequest.intervention', 'intervention')
-      .leftJoinAndSelect('fundRequest.requestedBy', 'requestedBy')
-      .leftJoinAndSelect('fundRequest.approvedBy', 'approvedBy')
+      .leftJoin('fundRequest.requestedBy', 'requestedBy')
+      .addSelect([
+        'requestedBy.id',
+        'requestedBy.email',
+        'requestedBy.full_name',
+      ])
+      .leftJoin('fundRequest.approvedBy', 'approvedBy')
+      .addSelect(['approvedBy.id', 'approvedBy.email', 'approvedBy.full_name'])
       .orderBy('fundRequest.createdAt', 'DESC');
 
-    if (targetFiscalYearId) {
+    if (fiscalYearId) {
       queryBuilder.where('fiscalYear.id = :fiscalYearId', {
-        fiscalYearId: targetFiscalYearId,
+        fiscalYearId,
       });
     }
 
@@ -130,7 +114,7 @@ export class FundRequestsService {
         });
 
       if (latestFiscalYear) {
-        targetFiscalYearId = latestFiscalYear.id;
+        targetFiscalYearId = latestFiscalYear.id as string;
       }
     }
 
@@ -156,28 +140,56 @@ export class FundRequestsService {
   }
 
   async findByBudgetLine(budgetLineId: string): Promise<FundRequestEntity[]> {
-    return this.fundRequestRepository.find({
-      where: { budgetLine: { id: budgetLineId } },
-      relations: ['intervention', 'requestedBy', 'approvedBy'],
-      order: { createdAt: 'DESC' },
-    });
+    return this.fundRequestRepository
+      .createQueryBuilder('fundRequest')
+      .leftJoinAndSelect('fundRequest.intervention', 'intervention')
+      .leftJoin('fundRequest.requestedBy', 'requestedBy')
+      .addSelect([
+        'requestedBy.id',
+        'requestedBy.email',
+        'requestedBy.full_name',
+      ])
+      .leftJoin('fundRequest.approvedBy', 'approvedBy')
+      .addSelect(['approvedBy.id', 'approvedBy.email', 'approvedBy.full_name'])
+      .where('fundRequest.budgetLineId = :budgetLineId', { budgetLineId })
+      .orderBy('fundRequest.createdAt', 'DESC')
+      .getMany();
   }
 
   async findByIntervention(
     interventionId: string,
   ): Promise<FundRequestEntity[]> {
-    return this.fundRequestRepository.find({
-      where: { intervention: { id: interventionId } },
-      relations: ['budgetLine', 'requestedBy', 'approvedBy'],
-      order: { createdAt: 'DESC' },
-    });
+    return this.fundRequestRepository
+      .createQueryBuilder('fundRequest')
+      .leftJoinAndSelect('fundRequest.budgetLine', 'budgetLine')
+      .leftJoin('fundRequest.requestedBy', 'requestedBy')
+      .addSelect([
+        'requestedBy.id',
+        'requestedBy.email',
+        'requestedBy.full_name',
+      ])
+      .leftJoin('fundRequest.approvedBy', 'approvedBy')
+      .addSelect(['approvedBy.id', 'approvedBy.email', 'approvedBy.full_name'])
+      .where('fundRequest.interventionId = :interventionId', { interventionId })
+      .orderBy('fundRequest.createdAt', 'DESC')
+      .getMany();
   }
 
   async findOne(id: string): Promise<FundRequestEntity> {
-    const fundRequest = await this.fundRequestRepository.findOne({
-      where: { id },
-      relations: ['budgetLine', 'intervention', 'requestedBy', 'approvedBy'],
-    });
+    const fundRequest = await this.fundRequestRepository
+      .createQueryBuilder('fundRequest')
+      .leftJoinAndSelect('fundRequest.budgetLine', 'budgetLine')
+      .leftJoinAndSelect('fundRequest.intervention', 'intervention')
+      .leftJoin('fundRequest.requestedBy', 'requestedBy')
+      .addSelect([
+        'requestedBy.id',
+        'requestedBy.email',
+        'requestedBy.full_name',
+      ])
+      .leftJoin('fundRequest.approvedBy', 'approvedBy')
+      .addSelect(['approvedBy.id', 'approvedBy.email', 'approvedBy.full_name'])
+      .where('fundRequest.id = :id', { id })
+      .getOne();
 
     if (!fundRequest) {
       throw new NotFoundException(`Fund request with ID ${id} not found`);
@@ -242,7 +254,7 @@ export class FundRequestsService {
 
     fundRequest.approvedAmount = approveDto.approvedAmount;
     fundRequest.status = FundRequestStatus.APPROVED;
-    fundRequest.approvedBy = { id: userId } as UserEntity;
+    fundRequest.approvedById = userId;
     fundRequest.approvedAt = new Date();
     fundRequest.notes = approveDto.notes || fundRequest.notes;
 
@@ -296,7 +308,7 @@ export class FundRequestsService {
     }
 
     fundRequest.status = FundRequestStatus.REJECTED;
-    fundRequest.approvedBy = { id: userId } as UserEntity;
+    fundRequest.approvedById = userId;
     fundRequest.approvedAt = new Date();
     fundRequest.notes = rejectDto.notes;
 

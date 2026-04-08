@@ -18,7 +18,7 @@ export interface RolePermissions {
     viewBudget: boolean;
     manageBudget: boolean;
   };
-  interventionsAndProjects: {
+  interventions: {
     createIntervention: boolean;
     manageBeneficiaries: boolean;
     viewInterventions: boolean;

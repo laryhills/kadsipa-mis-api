@@ -30,7 +30,7 @@ export class BeneficiariesController {
   }
 
   @Get()
-  @RequirePermission('interventionsAndProjects.viewInterventions')
+  @RequirePermission('interventions.viewInterventions')
   async findAll(@Query('includeDeleted') includeDeleted?: string) {
     const beneficiaries = await this.beneficiariesService.findAll(
       includeDeleted === 'true',
@@ -39,7 +39,7 @@ export class BeneficiariesController {
   }
 
   @Get(':id')
-  @RequirePermission('interventionsAndProjects.viewInterventions')
+  @RequirePermission('interventions.viewInterventions')
   async findOne(@Param('id') id: string) {
     const beneficiary = await this.beneficiariesService.findOne(id);
     return successResponse('Beneficiary fetched successfully', beneficiary);

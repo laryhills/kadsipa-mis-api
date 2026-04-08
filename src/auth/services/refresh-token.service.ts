@@ -101,7 +101,7 @@ export class RefreshTokenService {
 
     await this.refreshTokenRepository.save(refreshToken);
 
-    this.logger.log(`Rotated refresh token for user ${existingToken.userId}`);
+    /*   this.logger.log(`Rotated refresh token for user ${existingToken.userId}`); */
 
     return {
       newToken,

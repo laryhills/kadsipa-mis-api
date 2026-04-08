@@ -62,6 +62,8 @@ export class RolesGuard implements CanActivate {
   }
 
   private checkPermission(roles: RoleEntity[], permission: string): boolean {
+    /*     console.log('permission', permission);
+    console.log('roles', roles); */
     const [category, action] = permission.split('.');
 
     return roles.some((role) => {

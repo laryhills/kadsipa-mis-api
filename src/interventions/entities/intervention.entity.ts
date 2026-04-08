@@ -66,7 +66,7 @@ export class InterventionEntity {
     type: 'enum',
     enum: InterventionType,
     name: 'intervention_type',
-    nullable: true,
+    nullable: false,
   })
   interventionType: InterventionType;
 
@@ -92,8 +92,9 @@ export class InterventionEntity {
     scale: 2,
     nullable: false,
     default: 0,
+    name: 'budget_allocated',
   })
-  budget_allocated: number;
+  budgetAllocated: number;
 
   @Column({
     type: 'decimal',

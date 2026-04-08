@@ -9,7 +9,6 @@ import {
   IsOptional,
   IsPositive,
   IsString,
-  IsUUID,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import {
@@ -47,10 +46,6 @@ export class CreateInterventionDto {
   })
   @IsOptional()
   report_frequency?: ReportFrequency;
-
-  @IsUUID()
-  @IsOptional()
-  budget_line_id?: string;
 
   @IsDateString()
   @IsNotEmpty({ message: 'Start date is required' })

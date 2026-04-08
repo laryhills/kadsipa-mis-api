@@ -51,45 +51,40 @@ export class BudgetLinesService {
       fiscalYear,
       department,
       remainingAmount: createBudgetLineDto.allocatedAmount,
-      createdBy: { id: userId } as any,
+      createdById: userId,
     });
 
     return await this.budgetLineRepository.save(budgetLine);
   }
 
   async findAll(fiscalYearId?: string): Promise<BudgetLineEntity[]> {
-    let targetFiscalYearId = fiscalYearId;
+    const queryBuilder = this.budgetLineRepository
+      .createQueryBuilder('budgetLine')
+      .leftJoinAndSelect('budgetLine.fiscalYear', 'fiscalYear')
+      .leftJoinAndSelect('budgetLine.department', 'department')
+      .leftJoin('budgetLine.createdBy', 'createdBy')
+      .addSelect(['createdBy.id', 'createdBy.email', 'createdBy.full_name'])
+      .orderBy('budgetLine.createdAt', 'DESC');
 
-    // If no fiscal year provided, get the latest one
-    if (!targetFiscalYearId) {
-      const latestFiscalYear = await this.fiscalYearRepository.findOne({
-        where: { isActive: true },
-        order: { startDate: 'DESC' },
+    if (fiscalYearId) {
+      queryBuilder.where('"budgetLine"."fiscal_year_id" = :fiscalYearId', {
+        fiscalYearId,
       });
-
-      if (latestFiscalYear) {
-        targetFiscalYearId = latestFiscalYear.id;
-      }
     }
 
-    const where: any = {};
-
-    if (targetFiscalYearId) {
-      where.fiscalYear = { id: targetFiscalYearId };
-    }
-
-    return await this.budgetLineRepository.find({
-      where,
-      relations: ['createdBy', 'fiscalYear', 'department'],
-      order: { createdAt: 'DESC' },
-    });
+    return await queryBuilder.getMany();
   }
 
   async findOne(id: string): Promise<BudgetLineEntity> {
-    const budgetLine = await this.budgetLineRepository.findOne({
-      where: { id },
-      relations: ['createdBy', 'fiscalYear', 'department', 'fundRequests'],
-    });
+    const budgetLine = await this.budgetLineRepository
+      .createQueryBuilder('budgetLine')
+      .leftJoinAndSelect('budgetLine.fiscalYear', 'fiscalYear')
+      .leftJoinAndSelect('budgetLine.department', 'department')
+      .leftJoinAndSelect('budgetLine.fundRequests', 'fundRequests')
+      .leftJoin('budgetLine.createdBy', 'createdBy')
+      .addSelect(['createdBy.id', 'createdBy.email', 'createdBy.full_name'])
+      .where('"budgetLine"."id" = :id', { id })
+      .getOne();
 
     if (!budgetLine) {
       throw new NotFoundException(`Budget line with ID ${id} not found`);
@@ -150,7 +145,7 @@ export class BudgetLinesService {
       committedAmount: Number(budgetLine.committedAmount),
       spentAmount: Number(budgetLine.spentAmount),
       remainingAmount: Number(budgetLine.remainingAmount),
-      availableForNewInterventions:
+      available:
         Number(budgetLine.allocatedAmount) - Number(budgetLine.committedAmount),
     };
   }
@@ -167,8 +162,7 @@ export class BudgetLinesService {
       committedAmount: Number(line.committedAmount),
       spentAmount: Number(line.spentAmount),
       remainingAmount: Number(line.remainingAmount),
-      availableForNewInterventions:
-        Number(line.allocatedAmount) - Number(line.committedAmount),
+      available: Number(line.allocatedAmount) - Number(line.committedAmount),
       isActive: line.isActive,
     }));
 

@@ -56,14 +56,16 @@ export class UsersController {
 
   @Get(':id')
   @RequirePermission('userManagement.viewUsers')
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+  async findOne(@Param('id') id: string) {
+    const user = await this.usersService.findOne(id);
+    return successResponse('User fetched successfully', user);
   }
 
   @Patch(':id')
   @RequirePermission('userManagement.viewUsers')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
+  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    const user = await this.usersService.update(id, updateUserDto);
+    return successResponse('User updated successfully', user);
   }
 
   @Delete(':id')
@@ -96,6 +98,7 @@ export class UsersController {
     @Param('roleId') roleId: string,
   ) {
     await this.usersService.removeRole(userId, roleId);
+    return successResponse('Role removed successfully', null);
   }
 
   @Get(':id/roles')

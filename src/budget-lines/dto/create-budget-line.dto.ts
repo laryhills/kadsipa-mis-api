@@ -9,10 +9,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import {
-  BudgetType,
-  BudgetLineCategory,
-} from '../entities/budget-line.entity';
+import { BudgetType, BudgetLineCategory } from '../entities/budget-line.entity';
 
 export class CreateBudgetLineDto {
   @IsString()

@@ -32,7 +32,7 @@ export class CreateEnrollmentDto {
   reason_text?: string;
 
   @IsNumber({ maxDecimalPlaces: 2 })
-  @IsOptional()
+  @IsNotEmpty()
   allocation_amount?: number;
 
   @IsObject()

@@ -23,7 +23,7 @@ export class InitialSchema1775465460792 implements MigrationInterface {
       `CREATE TYPE "public"."intervention_enrollments_status_enum" AS ENUM('pending', 'completed')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "intervention_enrollments" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "intervention_id" uuid NOT NULL, "beneficiary_id" uuid NOT NULL, "enrollment_date" date NOT NULL, "reason_code" character varying(100), "reason_text" text, "status" "public"."intervention_enrollments_status_enum" NOT NULL DEFAULT 'pending', "allocation_amount" numeric(15,2), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "created_by" uuid, CONSTRAINT "UQ_7583d840fb9e5faf4da4a8ee9d5" UNIQUE ("intervention_id", "beneficiary_id"), CONSTRAINT "PK_ddabda73af8d69c19e7d3ca1ad1" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "intervention_enrollments" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "intervention_id" uuid NOT NULL, "beneficiary_id" uuid NOT NULL, "enrollment_date" date NOT NULL, "reason_code" character varying(100), "reason_text" text, "status" "public"."intervention_enrollments_status_enum" NOT NULL DEFAULT 'pending', "allocation_amount" numeric(15,2) NOT NULL, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "created_by" uuid, CONSTRAINT "UQ_7583d840fb9e5faf4da4a8ee9d5" UNIQUE ("intervention_id", "beneficiary_id"), CONSTRAINT "PK_ddabda73af8d69c19e7d3ca1ad1" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE TYPE "public"."interventions_status_enum" AS ENUM('pending', 'in_progress', 'completed')`,

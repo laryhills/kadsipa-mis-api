@@ -18,7 +18,7 @@ export class SeedDefaultRoles1775466934175 implements MigrationInterface {
             viewBudget: true,
             manageBudget: true,
           },
-          interventionsAndProjects: {
+          interventions: {
             createIntervention: true,
             manageBeneficiaries: true,
             viewInterventions: true,
@@ -54,7 +54,7 @@ export class SeedDefaultRoles1775466934175 implements MigrationInterface {
             viewBudget: false,
             manageBudget: false,
           },
-          interventionsAndProjects: {
+          interventions: {
             createIntervention: true,
             manageBeneficiaries: true,
             viewInterventions: true,
@@ -90,7 +90,7 @@ export class SeedDefaultRoles1775466934175 implements MigrationInterface {
             viewBudget: true,
             manageBudget: true,
           },
-          interventionsAndProjects: {
+          interventions: {
             createIntervention: false,
             manageBeneficiaries: false,
             viewInterventions: true,
@@ -126,7 +126,7 @@ export class SeedDefaultRoles1775466934175 implements MigrationInterface {
             viewBudget: false,
             manageBudget: false,
           },
-          interventionsAndProjects: {
+          interventions: {
             createIntervention: false,
             manageBeneficiaries: true,
             viewInterventions: true,

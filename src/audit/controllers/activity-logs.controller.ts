@@ -2,7 +2,7 @@ import { Controller, Get, Query, Param, UseGuards } from '@nestjs/common';
 import { ActivityLogsService } from '../services/activity-logs.service';
 import { QueryActivityLogDto } from '../dto/query-activity-log.dto';
 import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
-import { successResponse } from '@/common/response.helper';
+import { successResponse } from '@/common';
 
 @Controller('activity-logs')
 @UseGuards(PassportJwtGuard)

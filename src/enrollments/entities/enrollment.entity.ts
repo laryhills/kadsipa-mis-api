@@ -67,7 +67,7 @@ export class EnrollmentEntity {
   })
   status: EnrollmentStatus;
 
-  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: false })
   allocation_amount: number;
 
   @Column({ type: 'jsonb', nullable: true, name: 'custom_data' })

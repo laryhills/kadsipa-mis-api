@@ -136,7 +136,10 @@ export class EnrollmentsService {
       throw new BadRequestException('Invalid enrollment ID');
     }
 
-    await this.findOne(id);
+    const currentEnrollment = await this.findOne(id);
+    if (!currentEnrollment) {
+      throw new NotFoundException('Enrollment not found');
+    }
 
     if (
       updateEnrollmentDto.intervention_id ||
@@ -148,12 +151,12 @@ export class EnrollmentsService {
         .andWhere('enrollment.intervention_id = :interventionId', {
           interventionId:
             updateEnrollmentDto.intervention_id ||
-            (await this.findOne(id)).intervention_id,
+            currentEnrollment.intervention_id,
         })
         .andWhere('enrollment.beneficiary_id = :beneficiaryId', {
           beneficiaryId:
             updateEnrollmentDto.beneficiary_id ||
-            (await this.findOne(id)).beneficiary_id,
+            currentEnrollment.beneficiary_id,
         })
         .getOne();
 
@@ -164,9 +167,19 @@ export class EnrollmentsService {
       }
     }
 
-    await this.enrollmentRepository.update(id, updateEnrollmentDto);
+    const { customData, ...updateData } = updateEnrollmentDto;
+    await this.enrollmentRepository.update(id, updateData);
 
-    return await this.findOne(id);
+    if (customData !== undefined) {
+      currentEnrollment.customData = customData;
+      await this.enrollmentRepository.save(currentEnrollment);
+    }
+
+    const updated = await this.findOne(id);
+    if (!updated) {
+      throw new NotFoundException('Enrollment not found after update');
+    }
+    return updated;
   }
 
   async remove(id: string): Promise<void> {
@@ -175,6 +188,9 @@ export class EnrollmentsService {
     }
 
     const enrollment = await this.findOne(id);
+    if (!enrollment) {
+      throw new NotFoundException('Enrollment not found');
+    }
 
     await this.enrollmentRepository.remove(enrollment);
   }

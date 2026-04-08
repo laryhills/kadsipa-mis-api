@@ -6,7 +6,6 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany,
 } from 'typeorm';
 import { BudgetLineEntity } from '../../budget-lines/entities/budget-line.entity';
 import { InterventionEntity } from '../../interventions/entities/intervention.entity';
@@ -31,9 +30,15 @@ export class FundRequestEntity {
   @JoinColumn({ name: 'budget_line_id' })
   budgetLine: BudgetLineEntity;
 
+  @Column({ name: 'budget_line_id' })
+  budgetLineId: string;
+
   @ManyToOne(() => InterventionEntity, { nullable: true })
   @JoinColumn({ name: 'intervention_id' })
   intervention: InterventionEntity;
+
+  @Column({ name: 'intervention_id', nullable: true })
+  interventionId: string;
 
   @Column({
     type: 'decimal',
@@ -53,6 +58,15 @@ export class FundRequestEntity {
   approvedAmount: number;
 
   @Column({
+    type: 'decimal',
+    precision: 15,
+    scale: 2,
+    name: 'spent_amount',
+    default: 0,
+  })
+  spentAmount: number;
+
+  @Column({
     type: 'enum',
     enum: FundRequestStatus,
     default: FundRequestStatus.PENDING,
@@ -69,9 +83,15 @@ export class FundRequestEntity {
   @JoinColumn({ name: 'requested_by' })
   requestedBy: UserEntity;
 
+  @Column({ name: 'requested_by' })
+  requestedById: string;
+
   @ManyToOne(() => UserEntity, { nullable: true })
   @JoinColumn({ name: 'approved_by' })
   approvedBy: UserEntity;
+
+  @Column({ name: 'approved_by', nullable: true })
+  approvedById: string;
 
   @Column({ name: 'approved_at', type: 'timestamp', nullable: true })
   approvedAt: Date;

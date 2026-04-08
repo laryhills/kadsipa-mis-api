@@ -17,6 +17,7 @@ import type { RolePermissions } from './entities/role.entity';
 import { PassportJwtGuard } from '../auth/guards/passport-jwt.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { createdResponse, successResponse } from '../common';
 
 @Controller('roles')
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -28,42 +29,28 @@ export class RolesController {
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createRoleDto: CreateRoleDto) {
     const role = await this.rolesService.create(createRoleDto);
-    return {
-      success: true,
-      message: 'Role created successfully',
-      data: role,
-    };
+    return createdResponse('Role created successfully', role);
   }
 
   @Get()
   @RequirePermission('userManagement.viewUsers')
   async findAll() {
     const roles = await this.rolesService.findAll();
-    return {
-      success: true,
-      data: roles,
-    };
+    return successResponse('Roles fetched successfully', roles);
   }
 
   @Get(':id')
   @RequirePermission('userManagement.viewUsers')
   async findOne(@Param('id') id: string) {
     const role = await this.rolesService.findOne(id);
-    return {
-      success: true,
-      data: role,
-    };
+    return successResponse('Role fetched successfully', role);
   }
 
   @Patch(':id')
   @RequirePermission('userManagement.manageRoles')
   async update(@Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto) {
     const role = await this.rolesService.update(id, updateRoleDto);
-    return {
-      success: true,
-      message: 'Role updated successfully',
-      data: role,
-    };
+    return successResponse('Role updated successfully', role);
   }
 
   @Patch(':id/permissions')
@@ -74,11 +61,7 @@ export class RolesController {
   ) {
     const updateDto: UpdateRoleDto = { permissions };
     const role = await this.rolesService.update(id, updateDto);
-    return {
-      success: true,
-      message: 'Role permissions updated successfully',
-      data: role,
-    };
+    return successResponse('Role permissions updated successfully', role);
   }
 
   @Delete(':id')

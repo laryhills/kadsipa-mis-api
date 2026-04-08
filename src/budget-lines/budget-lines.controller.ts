@@ -19,6 +19,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import { createdResponse, successResponse } from '../common';
 
 @Controller('finance/budget-lines')
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -36,51 +37,35 @@ export class BudgetLinesController {
       createBudgetLineDto,
       currentUser.id,
     );
-    return {
-      success: true,
-      message: 'Budget line created successfully',
-      data: budgetLine,
-    };
+    return createdResponse('Budget line created successfully', budgetLine);
   }
 
   @Get()
   @RequirePermission('financialManagement.viewBudget')
   async findAll(@Query('fiscalYearId') fiscalYearId?: string) {
     const budgetLines = await this.budgetLinesService.findAll(fiscalYearId);
-    return {
-      success: true,
-      data: budgetLines,
-    };
+    return successResponse('Budget lines fetched successfully', budgetLines);
   }
 
   @Get('summary')
   @RequirePermission('financialManagement.viewBudget')
   async getSummary() {
     const summary = await this.budgetLinesService.getSummary();
-    return {
-      success: true,
-      data: summary,
-    };
+    return successResponse('Budget summary fetched successfully', summary);
   }
 
   @Get(':id')
   @RequirePermission('financialManagement.viewBudget')
   async findOne(@Param('id') id: string) {
     const budgetLine = await this.budgetLinesService.findOne(id);
-    return {
-      success: true,
-      data: budgetLine,
-    };
+    return successResponse('Budget line fetched successfully', budgetLine);
   }
 
   @Get(':id/balance')
   @RequirePermission('financialManagement.viewBudget')
   async getBalance(@Param('id') id: string) {
     const balance = await this.budgetLinesService.getBalance(id);
-    return {
-      success: true,
-      data: balance,
-    };
+    return successResponse('Budget balance fetched successfully', balance);
   }
 
   @Patch(':id')
@@ -93,11 +78,7 @@ export class BudgetLinesController {
       id,
       updateBudgetLineDto,
     );
-    return {
-      success: true,
-      message: 'Budget line updated successfully',
-      data: budgetLine,
-    };
+    return successResponse('Budget line updated successfully', budgetLine);
   }
 
   @Delete(':id')

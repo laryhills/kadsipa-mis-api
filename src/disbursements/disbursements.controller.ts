@@ -20,6 +20,7 @@ import { RequirePermission } from '../auth/decorators/require-permission.decorat
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { DisbursementStatus } from './entities/disbursement.entity';
+import { createdResponse, successResponse } from '../common';
 
 @Controller('disbursements')
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -37,11 +38,7 @@ export class DisbursementsController {
       createDisbursementDto,
       currentUser.id,
     );
-    return {
-      success: true,
-      message: 'Disbursement created successfully',
-      data: disbursement,
-    };
+    return createdResponse('Disbursement created successfully', disbursement);
   }
 
   @Post('batch')
@@ -55,15 +52,14 @@ export class DisbursementsController {
       createBatchDto,
       currentUser.id,
     );
-    return {
-      success: true,
-      message: `Batch of ${disbursements.length} disbursements created successfully`,
-      data: {
+    return createdResponse(
+      `Batch of ${disbursements.length} disbursements created successfully`,
+      {
         batchNumber: disbursements[0]?.batchNumber,
         count: disbursements.length,
         disbursements,
       },
-    };
+    );
   }
 
   @Get()
@@ -71,22 +67,17 @@ export class DisbursementsController {
   async findAll(
     @Query('status') status?: DisbursementStatus,
     @Query('interventionId') interventionId?: string,
-    @Query('budgetLineId') budgetLineId?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    const filters: any = {};
+    const filters: Record<string, unknown> = {};
     if (status) filters.status = status;
     if (interventionId) filters.interventionId = interventionId;
-    if (budgetLineId) filters.budgetLineId = budgetLineId;
     if (startDate) filters.startDate = new Date(startDate);
     if (endDate) filters.endDate = new Date(endDate);
 
     const disbursements = await this.disbursementsService.findAll(filters);
-    return {
-      success: true,
-      data: disbursements,
-    };
+    return successResponse('Disbursements fetched successfully', disbursements);
   }
 
   @Get('recent')
@@ -95,30 +86,27 @@ export class DisbursementsController {
     const disbursements = await this.disbursementsService.getRecent(
       limit ? parseInt(limit) : 10,
     );
-    return {
-      success: true,
-      data: disbursements,
-    };
+    return successResponse(
+      'Recent disbursements fetched successfully',
+      disbursements,
+    );
   }
 
-  @Get('by-category')
+  @Get('by-intervention')
   @RequirePermission('financialManagement.viewBudget')
-  async getByCategory() {
-    const summary = await this.disbursementsService.getByCategory();
-    return {
-      success: true,
-      data: summary,
-    };
+  async getByIntervention() {
+    const summary = await this.disbursementsService.getByIntervention();
+    return successResponse(
+      'Disbursement totals by intervention fetched successfully',
+      summary,
+    );
   }
 
   @Get(':id')
   @RequirePermission('financialManagement.viewBudget')
   async findOne(@Param('id') id: string) {
     const disbursement = await this.disbursementsService.findOne(id);
-    return {
-      success: true,
-      data: disbursement,
-    };
+    return successResponse('Disbursement fetched successfully', disbursement);
   }
 
   @Patch(':id/status')
@@ -133,10 +121,9 @@ export class DisbursementsController {
       updateStatusDto,
       currentUser.id,
     );
-    return {
-      success: true,
-      message: 'Disbursement status updated successfully',
-      data: disbursement,
-    };
+    return successResponse(
+      'Disbursement status updated successfully',
+      disbursement,
+    );
   }
 }

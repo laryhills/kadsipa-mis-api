@@ -1,11 +1,4 @@
-import {
-  IsNotEmpty,
-  IsNumber,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Min,
-} from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateDisbursementDto {
   @IsUUID()
@@ -16,13 +9,9 @@ export class CreateDisbursementDto {
   @IsNotEmpty()
   beneficiaryId: string;
 
-  @IsUUID()
-  @IsNotEmpty()
-  budgetLineId: string;
-
-  @IsNumber()
-  @Min(0.0)
-  amount: number;
+  // @IsNumber()
+  // @Min(0.0)
+  // amount: number;
 
   @IsString()
   @IsOptional()

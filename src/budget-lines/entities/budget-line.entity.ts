@@ -120,6 +120,9 @@ export class BudgetLineEntity {
   @JoinColumn({ name: 'created_by' })
   createdBy: UserEntity;
 
+  @Column({ name: 'created_by' })
+  createdById: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

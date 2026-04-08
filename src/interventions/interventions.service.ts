@@ -23,7 +23,14 @@ export class InterventionsService {
   ) {}
 
   async create(@Body() createInterventionDto: CreateInterventionDto) {
-    const { lga_ids, ...interventionData } = createInterventionDto;
+    const {
+      lga_ids,
+      funding_source,
+      intervention_type,
+      report_frequency,
+      budget_allocated,
+      ...interventionData
+    } = createInterventionDto;
 
     const lgas = await this.lgaRepository.findBy({ id: In(lga_ids) });
 
@@ -54,6 +61,10 @@ export class InterventionsService {
 
         const intervention = this.interventionRepository.create({
           ...interventionData,
+          budgetAllocated: budget_allocated,
+          fundingSource: funding_source,
+          interventionType: intervention_type,
+          reportFrequency: report_frequency,
           lgas,
           program_code,
         });
@@ -127,7 +138,13 @@ export class InterventionsService {
       throw new NotFoundException(`Intervention with ID ${id} not found`);
     }
 
-    const { lga_ids, ...interventionData } = updateInterventionDto;
+    const {
+      lga_ids,
+      funding_source,
+      intervention_type,
+      report_frequency,
+      ...interventionData
+    } = updateInterventionDto;
 
     if (lga_ids) {
       const lgas = await this.lgaRepository.findBy({ id: In(lga_ids) });
@@ -141,6 +158,17 @@ export class InterventionsService {
       }
 
       intervention.lgas = lgas;
+    }
+
+    // Map snake_case to camelCase
+    if (funding_source !== undefined) {
+      intervention.fundingSource = funding_source;
+    }
+    if (intervention_type !== undefined) {
+      intervention.interventionType = intervention_type;
+    }
+    if (report_frequency !== undefined) {
+      intervention.reportFrequency = report_frequency;
     }
 
     Object.assign(intervention, interventionData);

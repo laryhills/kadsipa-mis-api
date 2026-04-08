@@ -13,9 +13,6 @@ export class BatchDisbursementItemDto {
   @IsNotEmpty()
   beneficiaryId: string;
 
-  @IsNotEmpty()
-  amount: number;
-
   @IsString()
   @IsOptional()
   bankName?: string;
@@ -33,10 +30,6 @@ export class CreateBatchDisbursementDto {
   @IsUUID()
   @IsNotEmpty()
   interventionId: string;
-
-  @IsUUID()
-  @IsNotEmpty()
-  budgetLineId: string;
 
   @IsString()
   @IsOptional()
