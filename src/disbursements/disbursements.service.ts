@@ -231,24 +231,37 @@ export class DisbursementsService {
       createBatchDto.interventionId,
     );
 
-    const enrollments = await this.enrollmentsService.findByIntervention(
-      createBatchDto.interventionId,
-    );
-
     const batchBeneficiaryIds = createBatchDto.disbursements.map(
       (d) => d.beneficiaryId,
     );
     const uniqueBeneficiaryIds = new Set(batchBeneficiaryIds);
+
+    if (createBatchDto.disbursements.length === 0) {
+      throw new BadRequestException(
+        'Batch must contain at least one disbursement',
+      );
+    }
+
     if (uniqueBeneficiaryIds.size !== batchBeneficiaryIds.length) {
       throw new BadRequestException(
         'Duplicate beneficiaries in the batch; each beneficiary may only appear once.',
       );
     }
 
-    if (enrollments.length !== createBatchDto.disbursements.length) {
-      throw new BadRequestException(
-        `All beneficiaries must be enrolled in this intervention`,
-      );
+    const enrollments = await this.enrollmentsService.findByIntervention(
+      createBatchDto.interventionId,
+    );
+
+    const enrollmentMap = new Map(
+      enrollments.map((e) => [e.beneficiary_id, e]),
+    );
+
+    for (const beneficiaryId of uniqueBeneficiaryIds) {
+      if (!enrollmentMap.has(beneficiaryId)) {
+        throw new BadRequestException(
+          `Beneficiary ${beneficiaryId} is not enrolled in this intervention`,
+        );
+      }
     }
 
     const alreadyDisbursed = await this.disbursementRepository.exists({
@@ -264,7 +277,10 @@ export class DisbursementsService {
       );
     }
 
-    const totalAmount = enrollments.reduce(
+    const batchEnrollments = Array.from(uniqueBeneficiaryIds).map(
+      (id) => enrollmentMap.get(id)!,
+    );
+    const totalAmount = batchEnrollments.reduce(
       (sum, en) => sum + this.resolveDisbursementAmount(en),
       0,
     );
@@ -356,12 +372,167 @@ export class DisbursementsService {
         { status: EnrollmentStatus.COMPLETED },
       );
 
-      return await manager
+      /* return await manager
         .createQueryBuilder(DisbursementEntity, 'disbursement')
         .leftJoinAndSelect('disbursement.intervention', 'intervention')
         .leftJoinAndSelect('disbursement.beneficiary', 'beneficiary')
         .leftJoinAndSelect('disbursement.fundRequest', 'fundRequest')
         .leftJoinAndSelect('fundRequest.budgetLine', 'budgetLine')
+        .leftJoin('disbursement.createdBy', 'createdBy')
+        .addSelect(['createdBy.id', 'createdBy.email', 'createdBy.full_name'])
+        .where('disbursement.batchNumber = :batchNumber', { batchNumber })
+        .getMany(); */
+
+      return await manager
+        .createQueryBuilder(DisbursementEntity, 'disbursement')
+        .leftJoin('disbursement.createdBy', 'createdBy')
+        .addSelect(['createdBy.id', 'createdBy.email', 'createdBy.full_name'])
+        .where('disbursement.batchNumber = :batchNumber', { batchNumber })
+        .getMany();
+    });
+  }
+
+  async createBatchForPendingEnrollments(
+    interventionId: string,
+    userId: string,
+    referenceNumber?: string,
+  ): Promise<DisbursementEntity[]> {
+    const intervention =
+      await this.interventionsService.findOne(interventionId);
+
+    const allEnrollments =
+      await this.enrollmentsService.findByIntervention(interventionId);
+
+    const pendingEnrollments = allEnrollments.filter(
+      (e) => e.status === EnrollmentStatus.PENDING,
+    );
+
+    if (pendingEnrollments.length === 0) {
+      throw new BadRequestException(
+        'No pending enrollments found for this intervention',
+      );
+    }
+
+    const pendingBeneficiaryIds = pendingEnrollments.map(
+      (e) => e.beneficiary_id,
+    );
+
+    const alreadyDisbursedIds = await this.disbursementRepository.find({
+      where: {
+        interventionId: intervention.id,
+        beneficiaryId: In(pendingBeneficiaryIds),
+        status: In(BLOCKING_DISBURSEMENT_STATUSES),
+      },
+      select: ['beneficiaryId'],
+    });
+
+    const disbursedBeneficiaryIds = new Set(
+      alreadyDisbursedIds.map((d) => d.beneficiaryId),
+    );
+
+    const eligibleEnrollments = pendingEnrollments.filter(
+      (e) => !disbursedBeneficiaryIds.has(e.beneficiary_id),
+    );
+
+    if (eligibleEnrollments.length === 0) {
+      throw new BadRequestException(
+        'No eligible pending enrollments to disburse (all have existing disbursements)',
+      );
+    }
+
+    const totalAmount = eligibleEnrollments.reduce(
+      (sum, en) => sum + this.resolveDisbursementAmount(en),
+      0,
+    );
+
+    const interventionAvailable =
+      Number(intervention.budgetReceived) - Number(intervention.budgetSpent);
+    if (totalAmount > interventionAvailable) {
+      throw new BadRequestException(
+        `Insufficient intervention budget. Available: ₦${interventionAvailable}, Required: ₦${totalAmount}`,
+      );
+    }
+
+    const fundRequest = await this.findAvailableFundRequest(
+      intervention.id,
+      totalAmount,
+    );
+
+    return await this.dataSource.transaction(async (manager) => {
+      const batchNumber = await this.generateBatchNumberWithLock(manager);
+      const disbursements: DisbursementEntity[] = [];
+      const enrollmentIdsToComplete: string[] = [];
+
+      for (const enrollment of eligibleEnrollments) {
+        const beneficiary = await this.beneficiariesService.findOne(
+          enrollment.beneficiary_id,
+        );
+
+        const amount = this.resolveDisbursementAmount(enrollment);
+
+        const disbursement = manager.create(DisbursementEntity, {
+          batchNumber: batchNumber,
+          interventionId: intervention.id,
+          beneficiaryId: beneficiary.id,
+          fundRequestId: fundRequest.id,
+          amount: amount,
+          status: DisbursementStatus.PAID,
+          paymentDate: new Date(),
+          bankName: beneficiary.bank || undefined,
+          accountNumber: beneficiary.account_number || undefined,
+          referenceNumber: referenceNumber || undefined,
+          createdById: userId,
+        });
+
+        disbursements.push(disbursement);
+        enrollmentIdsToComplete.push(enrollment.id);
+      }
+
+      await manager.save(DisbursementEntity, disbursements);
+
+      await manager.update(
+        InterventionEntity,
+        { id: intervention.id },
+        { budgetSpent: Number(intervention.budgetSpent) + Number(totalAmount) },
+      );
+
+      await manager.update(
+        FundRequestEntity,
+        { id: fundRequest.id },
+        { spentAmount: Number(fundRequest.spentAmount) + Number(totalAmount) },
+      );
+
+      const budgetLine = await manager.findOne(BudgetLineEntity, {
+        where: { id: fundRequest.budgetLine.id },
+      });
+      if (budgetLine) {
+        budgetLine.spentAmount =
+          Number(budgetLine.spentAmount) + Number(totalAmount);
+        budgetLine.remainingAmount =
+          Number(budgetLine.allocatedAmount) -
+          Number(budgetLine.committedAmount);
+        await manager.save(BudgetLineEntity, budgetLine);
+      }
+
+      await manager.update(
+        EnrollmentEntity,
+        { id: In(enrollmentIdsToComplete) },
+        { status: EnrollmentStatus.COMPLETED },
+      );
+
+      /* return await manager
+        .createQueryBuilder(DisbursementEntity, 'disbursement')
+        .leftJoinAndSelect('disbursement.intervention', 'intervention')
+        .leftJoinAndSelect('disbursement.beneficiary', 'beneficiary')
+        .leftJoinAndSelect('disbursement.fundRequest', 'fundRequest')
+        .leftJoinAndSelect('fundRequest.budgetLine', 'budgetLine')
+        .leftJoin('disbursement.createdBy', 'createdBy')
+        .addSelect(['createdBy.id', 'createdBy.email', 'createdBy.full_name'])
+        .where('disbursement.batchNumber = :batchNumber', { batchNumber })
+        .getMany(); */
+
+      return await manager
+        .createQueryBuilder(DisbursementEntity, 'disbursement')
         .leftJoin('disbursement.createdBy', 'createdBy')
         .addSelect(['createdBy.id', 'createdBy.email', 'createdBy.full_name'])
         .where('disbursement.batchNumber = :batchNumber', { batchNumber })

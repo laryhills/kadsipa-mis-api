@@ -8,6 +8,8 @@ import {
   Delete,
   UseGuards,
   Query,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { InterventionsService } from './interventions.service';
 import { CreateInterventionDto } from './dto/create-intervention.dto';
@@ -19,6 +21,9 @@ import { createdResponse, successResponse } from '../common';
 import { UploadNotificationsService } from '../notifications/upload-notifications.service';
 import { DataReviewService } from '../data-review/data-review.service';
 import { BeneficiariesService } from '../beneficiaries/beneficiaries.service';
+import { DisbursementsService } from '../disbursements/disbursements.service';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
 @Controller('interventions')
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -28,6 +33,7 @@ export class InterventionsController {
     private readonly uploadNotificationsService: UploadNotificationsService,
     private readonly dataReviewService: DataReviewService,
     private readonly beneficiariesService: BeneficiariesService,
+    private readonly disbursementsService: DisbursementsService,
   ) {}
 
   @Post()
@@ -96,6 +102,30 @@ export class InterventionsController {
       pageNum,
     );
     return successResponse('Beneficiaries fetched successfully', result);
+  }
+
+  @Post(':id/disburse')
+  @RequirePermission('financialManagement.manageBudget')
+  @HttpCode(HttpStatus.CREATED)
+  async disburse(
+    @Param('id') id: string,
+    @Body() body: { referenceNumber?: string },
+    @CurrentUser() currentUser: JwtPayload,
+  ) {
+    const disbursements =
+      await this.disbursementsService.createBatchForPendingEnrollments(
+        id,
+        currentUser.id,
+        body?.referenceNumber || undefined,
+      );
+    return createdResponse(
+      `Batch of ${disbursements.length} disbursements created for pending enrollments`,
+      {
+        batchNumber: disbursements[0]?.batchNumber,
+        count: disbursements.length,
+        disbursements,
+      },
+    );
   }
 
   @Patch(':id')

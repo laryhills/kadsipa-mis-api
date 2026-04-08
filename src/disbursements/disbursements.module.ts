@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DisbursementsService } from './disbursements.service';
 import { DisbursementsController } from './disbursements.controller';
@@ -18,7 +18,7 @@ import { EnrollmentsModule } from '@/enrollments/enrollments.module';
       BudgetLineEntity,
     ]),
     BeneficiariesModule,
-    InterventionsModule,
+    forwardRef(() => InterventionsModule),
     RolesModule,
     EnrollmentsModule,
   ],

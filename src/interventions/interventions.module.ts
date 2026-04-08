@@ -7,6 +7,7 @@ import { LgaEntity } from '../lgas/entities/lga.entity';
 import { RolesModule } from '../roles/roles.module';
 import { DataReviewModule } from '../data-review/data-review.module';
 import { BeneficiariesModule } from '../beneficiaries/beneficiaries.module';
+import { DisbursementsModule } from '../disbursements/disbursements.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { BeneficiariesModule } from '../beneficiaries/beneficiaries.module';
     RolesModule,
     BeneficiariesModule,
     forwardRef(() => DataReviewModule),
+    forwardRef(() => DisbursementsModule),
   ],
   controllers: [InterventionsController],
   providers: [InterventionsService],

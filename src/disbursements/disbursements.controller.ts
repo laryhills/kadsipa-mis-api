@@ -11,7 +11,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { DisbursementsService } from './disbursements.service';
-import { CreateDisbursementDto } from './dto/create-disbursement.dto';
+/* import { CreateDisbursementDto } from './dto/create-disbursement.dto'; */
 import { CreateBatchDisbursementDto } from './dto/create-batch-disbursement.dto';
 import { UpdateDisbursementStatusDto } from './dto/update-disbursement-status.dto';
 import { PassportJwtGuard } from '../auth/guards/passport-jwt.guard';
@@ -27,7 +27,7 @@ import { createdResponse, successResponse } from '../common';
 export class DisbursementsController {
   constructor(private readonly disbursementsService: DisbursementsService) {}
 
-  @Post()
+  /*   @Post()
   @RequirePermission('financialManagement.manageBudget')
   @HttpCode(HttpStatus.CREATED)
   async create(
@@ -39,9 +39,9 @@ export class DisbursementsController {
       currentUser.id,
     );
     return createdResponse('Disbursement created successfully', disbursement);
-  }
+  } */
 
-  @Post('batch')
+  @Post()
   @RequirePermission('financialManagement.manageBudget')
   @HttpCode(HttpStatus.CREATED)
   async createBatch(
