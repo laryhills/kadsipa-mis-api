@@ -65,3 +65,6 @@ dump.rdb
 *.sql
 schema_dump.sql
 docs/
+
+# storage reports
+/storage/reports/

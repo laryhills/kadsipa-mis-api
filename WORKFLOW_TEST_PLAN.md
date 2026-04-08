@@ -752,3 +752,583 @@ _______________________________________________________________________
 _______________________________________________________________________
 
 **Approval**: _________________ (Signature)
+
+---
+
+# Phase 5: Reports Module Testing
+
+After completing the budget and disbursement workflow above, test the new Reports Module.
+
+---
+
+## Step 10A: Get Available Metrics (Optional)
+
+Before creating a report, you can fetch the list of available metrics to include.
+
+```http
+GET {{baseUrl}}/reports/metrics
+Authorization: Bearer {{token}}
+```
+
+**Expected Response**:
+```json
+{
+  "statusCode": 200,
+  "message": "All available metrics fetched successfully",
+  "data": [
+    {
+      "key": "totalFundsDisbursed",
+      "label": "Total Funds Disbursed",
+      "description": "Aggregated financial values per LGA",
+      "applicableReportTypes": ["ExecutiveSummary", "FinancialDisbursement", "InterventionSummary", "BudgetLineReport"]
+    },
+    {
+      "key": "beneficiaryCount",
+      "label": "Beneficiary Count",
+      "description": "Total number of beneficiaries reached",
+      "applicableReportTypes": ["ExecutiveSummary", "BeneficiaryList", "InterventionSummary"]
+    },
+    {
+      "key": "auditTrailLogs",
+      "label": "Audit Trail Logs",
+      "description": "Include timestamps of user actions and system changes",
+      "applicableReportTypes": ["ExecutiveSummary", "FinancialDisbursement", "InterventionSummary"]
+    }
+  ]
+}
+```
+
+**12 Total Metrics Available:**
+1. `totalFundsDisbursed` - Aggregated financial values per LGA
+2. `beneficiaryCount` - Total beneficiaries reached
+3. `auditTrailLogs` - User action timestamps
+4. `budgetUtilization` - Budget vs spending analysis
+5. `topLgasByDisbursal` - LGA rankings by disbursement
+6. `pendingVerification` - Pending approvals count
+7. `recentDisbursements` - Latest 10 transactions
+8. `genderBreakdown` - Beneficiary gender distribution
+9. `disabilityStats` - Beneficiaries with disabilities
+10. `enrollmentTrends` - Enrollment over time
+11. `fundingSourceAnalysis` - Breakdown by funding source
+12. `disbursementStatusSummary` - Status counts (paid/pending/failed)
+
+### Filter Metrics by Report Type
+
+```http
+GET {{baseUrl}}/reports/metrics?reportType=ExecutiveSummary
+Authorization: Bearer {{token}}
+```
+
+**Expected**: Only metrics applicable to Executive Summary reports
+
+---
+
+## Step 11: Generate Executive Summary Report (Save as Draft)
+
+```http
+POST {{baseUrl}}/reports
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Q2 2026 Executive Summary",
+  "interventionId": "{{interventionId}}",
+  "reportType": "ExecutiveSummary",
+  "startDate": "2026-04-01",
+  "endDate": "2026-06-30",
+  "fileFormat": "Both",
+  "includedMetrics": [
+    "totalFundsDisbursed",
+    "beneficiaryCount",
+    "auditTrailLogs"
+  ],
+  "shouldFinalize": false
+}
+```
+
+**Expected Response**:
+```json
+{
+  "statusCode": 201,
+  "message": "Report created successfully. Use the finalise endpoint to generate the report.",
+  "data": {
+    "id": "{{reportId1}}",
+    "referenceNumber": "RPT-2026-001",
+    "name": "Q2 2026 Executive Summary",
+    "reportType": "ExecutiveSummary",
+    "status": "Draft",
+    "fileFormat": "Both",
+    "config": {
+      "includedMetrics": [
+        "totalFundsDisbursed",
+        "beneficiaryCount",
+        "auditTrailLogs"
+      ]
+    }
+  }
+}
+```
+
+**Action**: Save `{{reportId1}}`.
+
+**Note**: `includedMetrics` can include:
+- `totalFundsDisbursed` - Aggregated financial values per LGA
+- `beneficiaryCount` - Aggregated financial values per LGA  
+- `auditTrailLogs` - Include timestamps of user actions
+- Or any custom metrics based on report type
+
+---
+
+## Step 11B: Generate Report and Finalise Immediately
+
+```http
+POST {{baseUrl}}/reports
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Q2 2026 Executive Summary - Auto Finalized",
+  "interventionId": "{{interventionId}}",
+  "reportType": "ExecutiveSummary",
+  "startDate": "2026-04-01",
+  "endDate": "2026-06-30",
+  "fileFormat": "Both",
+  "includedMetrics": [
+    "totalFundsDisbursed",
+    "beneficiaryCount"
+  ],
+  "shouldFinalize": true
+}
+```
+
+**Expected Response**:
+```json
+{
+  "statusCode": 201,
+  "message": "Report created successfully. Use the finalise endpoint to generate the report.",
+  "data": {
+    "id": "{{reportId1B}}",
+    "referenceNumber": "RPT-2026-002",
+    "name": "Q2 2026 Executive Summary - Auto Finalized",
+    "reportType": "ExecutiveSummary",
+    "status": "Processing",
+    "fileFormat": "Both"
+  }
+}
+```
+
+**Note**: When `shouldFinalize: true`, the report immediately queues for generation. Check status after 5-10 seconds.
+
+---
+
+## Step 12: Finalise Report (Queue Generation) - For Draft Reports
+
+```http
+POST {{baseUrl}}/reports/{{reportId1}}/finalise
+Authorization: Bearer {{token}}
+```
+
+**Expected Response**:
+```json
+{
+  "statusCode": 200,
+  "message": "Report generation queued. Check status for completion.",
+  "data": {
+    "id": "{{reportId1}}",
+    "referenceNumber": "RPT-2026-001",
+    "status": "Processing"
+  }
+}
+```
+
+**Wait 5-10 seconds** for background job to complete.
+
+---
+
+## Step 13: Check Report Status
+
+```http
+GET {{baseUrl}}/reports/{{reportId1}}
+Authorization: Bearer {{token}}
+```
+
+**Expected Response**:
+```json
+{
+  "statusCode": 200,
+  "message": "Report fetched successfully",
+  "data": {
+    "id": "{{reportId1}}",
+    "referenceNumber": "RPT-2026-001",
+    "name": "Q2 2026 Executive Summary",
+    "reportType": "ExecutiveSummary",
+    "status": "Finalised",
+    "pdfUrl": "RPT-2026-001.pdf",
+    "excelUrl": "RPT-2026-001.xlsx",
+    "generatedAt": "2026-04-07T...",
+    "intervention": {
+      "id": "{{interventionId}}",
+      "name": "Budget Flow Test - Cash Transfer 2026"
+    }
+  }
+}
+```
+
+**Verify**:
+- ✅ Status changed to "Finalised"
+- ✅ Both `pdfUrl` and `excelUrl` are populated
+- ✅ `generatedAt` timestamp is present
+
+---
+
+## Step 14: Download PDF Report
+
+```http
+GET {{baseUrl}}/reports/{{reportId1}}/download/pdf
+Authorization: Bearer {{token}}
+```
+
+**Expected**: File download starts (RPT-2026-001.pdf)
+
+**Verify PDF Contains**:
+- ✅ Key Metrics: Budget Allocated (₦10M), Disbursed (₦150K), Utilization Rate
+- ✅ Beneficiaries Reached: 3
+- ✅ Fund Utilization Analysis charts
+- ✅ Recent Disbursement Log with 3 entries
+
+---
+
+## Step 15: Download Excel Report
+
+```http
+GET {{baseUrl}}/reports/{{reportId1}}/download/excel
+Authorization: Bearer {{token}}
+```
+
+**Expected**: File download starts (RPT-2026-001.xlsx)
+
+**Verify Excel Contains**:
+- ✅ Sheet 1: Executive Summary (key metrics)
+- ✅ Sheet 2: Top LGAs (if applicable)
+- ✅ Sheet 3: Recent Disbursements (3 rows: Aisha, Musa, Halima)
+
+---
+
+## Step 16: Generate Financial Disbursement Report (Finalise Immediately)
+
+```http
+POST {{baseUrl}}/reports
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "April 2026 Disbursement Report",
+  "interventionId": "{{interventionId}}",
+  "reportType": "FinancialDisbursement",
+  "startDate": "2026-04-01",
+  "endDate": "2026-04-30",
+  "fileFormat": "PDF",
+  "includedMetrics": [
+    "totalFundsDisbursed",
+    "beneficiaryCount"
+  ],
+  "shouldFinalize": true
+}
+```
+
+**Expected**: Report created with `reportType: "FinancialDisbursement"` and immediately queued for generation
+
+**Action**: Save `{{reportId2}}`, wait 5-10 seconds, check status, then download PDF.
+
+**Verify PDF Contains**:
+- ✅ Summary: Total Count (3), Total Amount (₦150K)
+- ✅ Paid Count: 3, Paid Amount: ₦150K
+- ✅ Detailed disbursement list with batch numbers
+
+---
+
+## Step 17: Generate Beneficiary List Report
+
+```http
+POST {{baseUrl}}/reports
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Approved Beneficiaries - Budget Flow Test",
+  "interventionId": "{{interventionId}}",
+  "reportType": "BeneficiaryList",
+  "fileFormat": "Excel"
+}
+```
+
+**Expected**: Report created with `reportType: "BeneficiaryList"`
+
+**Action**: Finalise and download Excel.
+
+**Verify Excel Contains**:
+- ✅ All 3 beneficiaries (Aisha, Musa, Halima)
+- ✅ Columns: First Name, Last Name, NIN, Phone, Gender, LGA, Status
+- ✅ Correct account details for each
+
+---
+
+## Step 18: Generate Intervention Summary Report
+
+```http
+POST {{baseUrl}}/reports
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Budget Flow Test - Intervention Summary",
+  "interventionId": "{{interventionId}}",
+  "reportType": "InterventionSummary",
+  "fileFormat": "Both"
+}
+```
+
+**Expected**: Intervention-specific report
+
+**Verify PDF/Excel Contains**:
+- ✅ Intervention Name: "Budget Flow Test - Cash Transfer 2026"
+- ✅ Budget Allocated: ₦10,000,000
+- ✅ Budget Received: ₦5,000,000
+- ✅ Budget Spent: ₦150,000
+- ✅ Utilization Rate: 1.5% (150K / 10M)
+- ✅ Total Enrollments: 3
+- ✅ Total Disbursements: 3
+- ✅ Total Disbursed Amount: ₦150,000
+
+---
+
+## Step 19: Generate Budget Line Report
+
+```http
+POST {{baseUrl}}/reports
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "FY 2026 - Budget Line Performance",
+  "reportType": "BudgetLineReport",
+  "fileFormat": "Excel",
+  "config": {
+    "fiscalYearId": "{{fiscalYearId}}"
+  }
+}
+```
+
+**Expected**: Report for all budget lines in fiscal year
+
+**Verify Excel Contains**:
+- ✅ Budget Line: "Social Protection - Direct Cash Transfers"
+- ✅ Category: DIRECT_CASH_TRANSFERS
+- ✅ Allocated: ₦50,000,000
+- ✅ Committed: ₦5,000,000
+- ✅ Spent: ₦150,000
+- ✅ Remaining: ₦45,000,000
+- ✅ Utilization %: 0.3% (150K / 50M)
+
+---
+
+## Step 20: List All Reports with Filters
+
+### Get All Reports
+```http
+GET {{baseUrl}}/reports
+Authorization: Bearer {{token}}
+```
+
+**Expected**: List of all created reports
+
+### Filter by Intervention
+```http
+GET {{baseUrl}}/reports?interventionId={{interventionId}}
+Authorization: Bearer {{token}}
+```
+
+**Expected**: Only reports for this intervention
+
+### Filter by Report Type
+```http
+GET {{baseUrl}}/reports?reportType=ExecutiveSummary
+Authorization: Bearer {{token}}
+```
+
+**Expected**: Only executive summary reports
+
+### Filter by Status
+```http
+GET {{baseUrl}}/reports?status=Finalised
+Authorization: Bearer {{token}}
+```
+
+**Expected**: Only finalised reports
+
+### Search by Name
+```http
+GET {{baseUrl}}/reports?search=Budget Flow
+Authorization: Bearer {{token}}
+```
+
+**Expected**: Reports matching search term
+
+### Pagination
+```http
+GET {{baseUrl}}/reports?page=1&limit=5&sortBy=createdAt&sortOrder=DESC
+Authorization: Bearer {{token}}
+```
+
+**Expected**: First 5 reports, sorted by creation date (newest first)
+
+---
+
+## Step 21: Regenerate a Report
+
+```http
+POST {{baseUrl}}/reports/{{reportId1}}/regenerate
+Authorization: Bearer {{token}}
+```
+
+**Expected Response**:
+```json
+{
+  "statusCode": 200,
+  "message": "Report regeneration queued. Check status for completion.",
+  "data": {
+    "id": "{{reportId1}}",
+    "status": "Processing",
+    "pdfUrl": null,
+    "excelUrl": null
+  }
+}
+```
+
+**Verify**:
+- ✅ Old files are deleted
+- ✅ Status changes to "Processing"
+- ✅ After completion, new files are generated with same reference number
+
+---
+
+## Step 22: Delete a Report
+
+```http
+DELETE {{baseUrl}}/reports/{{reportId2}}
+Authorization: Bearer {{token}}
+```
+
+**Expected Response**:
+```json
+{
+  "statusCode": 200,
+  "message": "Report deleted successfully",
+  "data": null
+}
+```
+
+**Verify**:
+- ✅ Report is removed from database
+- ✅ Associated PDF/Excel files are deleted from storage
+- ✅ GET request to deleted report returns 404
+
+---
+
+## Reports Module Verification Checklist
+
+### ✅ Report Creation
+- [ ] Draft reports are created successfully
+- [ ] Reference numbers follow RPT-YYYY-NNN format
+- [ ] All report types are supported
+- [ ] Both PDF and Excel formats work
+
+### ✅ Report Generation
+- [ ] Finalise endpoint queues background job
+- [ ] BullMQ processor generates files correctly
+- [ ] Status changes: Draft → Processing → Finalised
+- [ ] Failed generations show error message
+
+### ✅ Report Content Accuracy
+- [ ] Executive Summary shows correct budget/disbursement totals
+- [ ] Financial Disbursement lists all disbursements
+- [ ] Beneficiary List includes all enrolled beneficiaries
+- [ ] Intervention Summary calculates utilization correctly
+- [ ] Budget Line Report shows accurate spending
+
+### ✅ File Downloads
+- [ ] PDF files download successfully
+- [ ] Excel files download successfully
+- [ ] Files contain expected data
+- [ ] File names match reference numbers
+
+### ✅ Query & Filtering
+- [ ] Search by report name works
+- [ ] Filter by interventionId works
+- [ ] Filter by reportType works
+- [ ] Filter by status works
+- [ ] Pagination works correctly
+- [ ] Sorting works (createdAt, name, etc.)
+
+### ✅ Report Management
+- [ ] Regenerate creates new files
+- [ ] Delete removes database record and files
+- [ ] Only users with correct permissions can access
+- [ ] Draft reports can be edited (PATCH endpoint)
+- [ ] Finalized reports cannot be edited (returns 403 Forbidden)
+- [ ] Finalized reports have cryptographic signature
+
+### ✅ Metrics Endpoint
+- [ ] GET /reports/metrics returns all 12 metrics
+- [ ] Filter by reportType works correctly
+- [ ] Each metric shows applicable report types
+
+### ✅ Security
+- [ ] User data in responses excludes passwords and secrets
+- [ ] generatedBy only shows: id, email, full_name
+- [ ] Cryptographic signature prevents tampering
+
+### ✅ RBAC Permissions
+- [ ] `reports.viewReports` - Super Admin, Intervention Manager, Finance Officer, M&E Officer
+- [ ] `reports.generateReports` - Super Admin, Intervention Manager, Finance Officer, M&E Officer
+- [ ] `reports.deleteReports` - Super Admin only
+
+---
+
+## Complete Workflow Summary
+
+```
+Phase 3 & 4: Budget & Disbursement Flow
+  ✅ Create Intervention (₦10M allocated)
+  ✅ Upload & Approve 3 Beneficiaries
+  ❌ Try Disburse → Fails (no budget received)
+  ✅ Create Budget Line (₦50M)
+  ✅ Create & Approve Fund Request (₦5M → intervention)
+  ✅ Disburse ₦150K to 3 beneficiaries
+  ✅ Verify all financial calculations
+
+Phase 5: Reports Module
+  ✅ Generate Executive Summary (PDF + Excel)
+  ✅ Generate Financial Disbursement Report
+  ✅ Generate Beneficiary List
+  ✅ Generate Intervention Summary
+  ✅ Generate Budget Line Report
+  ✅ Download, filter, search, regenerate, delete
+```
+
+---
+
+## Final Approval
+
+**Phase 5 Test Execution**
+
+**Date**: _____________
+**Tester**: _____________
+**Result**: [ ] PASS  [ ] FAIL
+**Reports Generated**: [ ] Executive Summary  [ ] Financial Disbursement  [ ] Beneficiary List  [ ] Intervention Summary  [ ] Budget Line
+
+**Notes**: 
+_______________________________________________________________________
+_______________________________________________________________________
+
+**Approval**: _________________ (Signature)
