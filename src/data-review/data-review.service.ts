@@ -21,6 +21,7 @@ import { NotificationType } from '../notifications/entities/upload-notification.
 import type { ApprovePendingDto } from './dto/approve-pending.dto';
 import type { RejectPendingDto } from './dto/reject-pending.dto';
 import type { LinkPendingDto } from './dto/link-pending.dto';
+import { LgaEntity } from '@/lgas/entities/lga.entity';
 
 export interface UploadResult {
   total: number;
@@ -68,6 +69,8 @@ export class DataReviewService {
   constructor(
     @InjectRepository(PendingBeneficiaryEntity)
     private readonly pendingBeneficiaryRepository: Repository<PendingBeneficiaryEntity>,
+    @InjectRepository(LgaEntity)
+    private readonly lgaRepository: Repository<LgaEntity>,
     private readonly beneficiariesService: BeneficiariesService,
     private readonly interventionsService: InterventionsService,
     private readonly enrollmentsService: EnrollmentsService,
@@ -142,9 +145,26 @@ export class DataReviewService {
         }
 
         const errors = this.validateBeneficiaryData(coreData);
+
+        // validate the lga if provided
+        if (coreData.lga) {
+          const lga = await this.lgaRepository.findOne({
+            where: { name: coreData.lga as string },
+          });
+          if (!lga) {
+            errors.push({
+              field: 'lga',
+              message: `Invalid LGA: ${coreData.lga as string} for beneficiary ${coreData.first_name as string} ${coreData.last_name as string}`,
+            });
+          }
+        }
+
         if (errors.length > 0) {
-          throw new BadRequestException(
+          /* throw new BadRequestException(
             `File must contain valid beneficiary data : ${errors.map((error) => error.field).join(', ')} is missing`,
+          ); */
+          throw new BadRequestException(
+            `File must contain valid beneficiary data : ${errors[0]?.message || 'Unknown error'}`,
           );
         }
 
@@ -402,6 +422,13 @@ export class DataReviewService {
       errors.push({
         field: 'amount',
         message: 'Amount is required and must be a number',
+      });
+    }
+
+    if (!data.lga) {
+      errors.push({
+        field: 'lga',
+        message: 'LGA is required',
       });
     }
 

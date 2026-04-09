@@ -7,10 +7,11 @@ import { BeneficiariesModule } from '../beneficiaries/beneficiaries.module';
 import { InterventionsModule } from '../interventions/interventions.module';
 import { EnrollmentsModule } from '../enrollments/enrollments.module';
 import { RolesModule } from '../roles/roles.module';
+import { LgaEntity } from '@/lgas/entities/lga.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PendingBeneficiaryEntity]),
+    TypeOrmModule.forFeature([PendingBeneficiaryEntity, LgaEntity]),
     BeneficiariesModule,
     forwardRef(() => InterventionsModule),
     EnrollmentsModule,
