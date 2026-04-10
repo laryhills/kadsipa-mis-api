@@ -179,7 +179,7 @@ export class ReportGeneratorService {
       doc.fontSize(11);
       data.topLgas.forEach((lga, index) => {
         doc.text(
-          `${index + 1}. ${lga.name}: N${lga.totalAmount.toLocaleString()} (${lga.beneficiaryCount} beneficiaries)`,
+          `${index + 1}. ${lga?.name?.toUpperCase() || 'N/A'}: N${lga.totalAmount.toLocaleString()} (${lga.beneficiaryCount} beneficiaries)`,
         );
       });
       doc.moveDown(2);
@@ -438,7 +438,7 @@ export class ReportGeneratorService {
 
       data.topLgas.forEach((lga) => {
         lgaSheet.addRow({
-          name: lga.name,
+          name: lga?.name?.toUpperCase() || 'N/A',
           amount: `₦${lga.totalAmount.toLocaleString()}`,
           count: lga.beneficiaryCount,
         });

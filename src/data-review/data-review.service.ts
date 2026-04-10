@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, ILike, Repository } from 'typeorm';
 import csvParser from 'csv-parser';
 import * as XLSX from 'xlsx';
 import { Readable } from 'stream';
@@ -148,9 +148,11 @@ export class DataReviewService {
 
         // validate the lga if provided
         if (coreData.lga) {
+          // Make the LGA lookup case-insensitive by using ILike (for Postgres) if using TypeORM.
           const lga = await this.lgaRepository.findOne({
-            where: { name: coreData.lga as string },
+            where: { name: ILike(coreData.lga as string) },
           });
+
           if (!lga) {
             errors.push({
               field: 'lga',
