@@ -9,6 +9,7 @@ import { BeneficiariesModule } from '../beneficiaries/beneficiaries.module';
 import { InterventionsModule } from '../interventions/interventions.module';
 import { RolesModule } from '../roles/roles.module';
 import { EnrollmentsModule } from '@/enrollments/enrollments.module';
+import { DashboardModule } from '../dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { EnrollmentsModule } from '@/enrollments/enrollments.module';
     forwardRef(() => InterventionsModule),
     RolesModule,
     EnrollmentsModule,
+    DashboardModule,
   ],
   providers: [DisbursementsService],
   controllers: [DisbursementsController],

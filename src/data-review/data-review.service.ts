@@ -22,6 +22,7 @@ import type { ApprovePendingDto } from './dto/approve-pending.dto';
 import type { RejectPendingDto } from './dto/reject-pending.dto';
 import type { LinkPendingDto } from './dto/link-pending.dto';
 import { LgaEntity } from '@/lgas/entities/lga.entity';
+import { DashboardCacheService } from '../dashboard/dashboard-cache.service';
 
 export interface UploadResult {
   total: number;
@@ -76,6 +77,7 @@ export class DataReviewService {
     private readonly enrollmentsService: EnrollmentsService,
     private readonly uploadNotificationsService: UploadNotificationsService,
     private readonly dataSource: DataSource,
+    private readonly dashboardCache: DashboardCacheService,
   ) {}
 
   async uploadBeneficiaries(
@@ -257,6 +259,7 @@ export class DataReviewService {
         createdById: userId,
       });
 
+      this.dashboardCache.invalidate();
       return results;
     } catch (error) {
       await this.uploadNotificationsService.create({
@@ -541,7 +544,7 @@ export class DataReviewService {
       );
     }
 
-    return await this.dataSource.transaction(async (manager) => {
+    const savedPending = await this.dataSource.transaction(async (manager) => {
       const beneficiary = await this.beneficiariesService.createOne(
         pending.coreData as Record<string, string>,
         userId,
@@ -565,10 +568,7 @@ export class DataReviewService {
         pending.reviewNotes = dto.notes;
       }
 
-      const savedPending = await manager.save(
-        PendingBeneficiaryEntity,
-        pending,
-      );
+      const saved = await manager.save(PendingBeneficiaryEntity, pending);
 
       await this.uploadNotificationsService.create({
         interventionId: pending.interventionId,
@@ -579,8 +579,11 @@ export class DataReviewService {
         createdById: userId,
       });
 
-      return savedPending;
+      return saved;
     });
+
+    this.dashboardCache.invalidate();
+    return savedPending;
   }
 
   async reject(
@@ -610,7 +613,9 @@ export class DataReviewService {
       createdById: userId,
     });
 
-    return await this.pendingBeneficiaryRepository.save(pending);
+    const savedReject = await this.pendingBeneficiaryRepository.save(pending);
+    this.dashboardCache.invalidate();
+    return savedReject;
   }
 
   async linkToExisting(
@@ -641,7 +646,7 @@ export class DataReviewService {
       );
     }
 
-    return await this.dataSource.transaction(async (manager) => {
+    const linked = await this.dataSource.transaction(async (manager) => {
       const enrollment = await this.enrollmentsService.create({
         beneficiary_id: dto.beneficiaryId,
         intervention_id: pending.interventionId,
@@ -661,6 +666,9 @@ export class DataReviewService {
 
       return await manager.save(PendingBeneficiaryEntity, pending);
     });
+
+    this.dashboardCache.invalidate();
+    return linked;
   }
 
   async getStatistics(): Promise<{

@@ -28,6 +28,7 @@ import { DepartmentsModule } from './departments/departments.module';
 import { FundRequestsModule } from './fund-requests/fund-requests.module';
 import { DataReviewModule } from './data-review/data-review.module';
 import { ReportsModule } from './reports/reports.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -100,6 +101,7 @@ import { ReportsModule } from './reports/reports.module';
     DisbursementsModule,
     DataReviewModule,
     ReportsModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

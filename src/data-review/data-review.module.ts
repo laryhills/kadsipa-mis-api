@@ -8,6 +8,7 @@ import { InterventionsModule } from '../interventions/interventions.module';
 import { EnrollmentsModule } from '../enrollments/enrollments.module';
 import { RolesModule } from '../roles/roles.module';
 import { LgaEntity } from '@/lgas/entities/lga.entity';
+import { DashboardModule } from '../dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { LgaEntity } from '@/lgas/entities/lga.entity';
     forwardRef(() => InterventionsModule),
     EnrollmentsModule,
     RolesModule,
+    DashboardModule,
   ],
   controllers: [DataReviewController],
   providers: [DataReviewService],

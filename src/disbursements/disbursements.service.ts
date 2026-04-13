@@ -26,6 +26,7 @@ import {
   EnrollmentStatus,
 } from '../enrollments/entities/enrollment.entity';
 import { InterventionEntity } from '../interventions/entities/intervention.entity';
+import { DashboardCacheService } from '../dashboard/dashboard-cache.service';
 
 const BLOCKING_DISBURSEMENT_STATUSES: DisbursementStatus[] = [
   DisbursementStatus.PAID,
@@ -115,6 +116,7 @@ export class DisbursementsService {
     private readonly interventionsService: InterventionsService,
     private readonly enrollmentsService: EnrollmentsService,
     private readonly dataSource: DataSource,
+    private readonly dashboardCache: DashboardCacheService,
   ) {}
 
   async create(
@@ -220,6 +222,7 @@ export class DisbursementsService {
       },
     );
 
+    this.dashboardCache.invalidate();
     return await this.findOne(disbursementId);
   }
 
@@ -298,7 +301,7 @@ export class DisbursementsService {
       totalAmount,
     );
 
-    return await this.dataSource.transaction(async (manager) => {
+    const batchResult = await this.dataSource.transaction(async (manager) => {
       const batchNumber = await this.generateBatchNumberWithLock(manager);
       const disbursements: DisbursementEntity[] = [];
       const enrollmentIdsToComplete: string[] = [];
@@ -390,6 +393,8 @@ export class DisbursementsService {
         .where('disbursement.batchNumber = :batchNumber', { batchNumber })
         .getMany();
     });
+    this.dashboardCache.invalidate();
+    return batchResult;
   }
 
   async createBatchForPendingEnrollments(
@@ -458,69 +463,74 @@ export class DisbursementsService {
       totalAmount,
     );
 
-    return await this.dataSource.transaction(async (manager) => {
-      const batchNumber = await this.generateBatchNumberWithLock(manager);
-      const disbursements: DisbursementEntity[] = [];
-      const enrollmentIdsToComplete: string[] = [];
+    const pendingBatchResult = await this.dataSource.transaction(
+      async (manager) => {
+        const batchNumber = await this.generateBatchNumberWithLock(manager);
+        const disbursements: DisbursementEntity[] = [];
+        const enrollmentIdsToComplete: string[] = [];
 
-      for (const enrollment of eligibleEnrollments) {
-        const beneficiary = await this.beneficiariesService.findOne(
-          enrollment.beneficiary_id,
+        for (const enrollment of eligibleEnrollments) {
+          const beneficiary = await this.beneficiariesService.findOne(
+            enrollment.beneficiary_id,
+          );
+
+          const amount = this.resolveDisbursementAmount(enrollment);
+
+          const disbursement = manager.create(DisbursementEntity, {
+            batchNumber: batchNumber,
+            interventionId: intervention.id,
+            beneficiaryId: beneficiary.id,
+            fundRequestId: fundRequest.id,
+            amount: amount,
+            status: DisbursementStatus.PAID,
+            paymentDate: new Date(),
+            bankName: beneficiary.bank || undefined,
+            accountNumber: beneficiary.account_number || undefined,
+            referenceNumber: referenceNumber || undefined,
+            createdById: userId,
+          });
+
+          disbursements.push(disbursement);
+          enrollmentIdsToComplete.push(enrollment.id);
+        }
+
+        await manager.save(DisbursementEntity, disbursements);
+
+        await manager.update(
+          InterventionEntity,
+          { id: intervention.id },
+          {
+            budgetSpent: Number(intervention.budgetSpent) + Number(totalAmount),
+          },
         );
 
-        const amount = this.resolveDisbursementAmount(enrollment);
+        await manager.update(
+          FundRequestEntity,
+          { id: fundRequest.id },
+          {
+            spentAmount: Number(fundRequest.spentAmount) + Number(totalAmount),
+          },
+        );
 
-        const disbursement = manager.create(DisbursementEntity, {
-          batchNumber: batchNumber,
-          interventionId: intervention.id,
-          beneficiaryId: beneficiary.id,
-          fundRequestId: fundRequest.id,
-          amount: amount,
-          status: DisbursementStatus.PAID,
-          paymentDate: new Date(),
-          bankName: beneficiary.bank || undefined,
-          accountNumber: beneficiary.account_number || undefined,
-          referenceNumber: referenceNumber || undefined,
-          createdById: userId,
+        const budgetLine = await manager.findOne(BudgetLineEntity, {
+          where: { id: fundRequest.budgetLine.id },
         });
+        if (budgetLine) {
+          budgetLine.spentAmount =
+            Number(budgetLine.spentAmount) + Number(totalAmount);
+          budgetLine.remainingAmount =
+            Number(budgetLine.allocatedAmount) -
+            Number(budgetLine.committedAmount);
+          await manager.save(BudgetLineEntity, budgetLine);
+        }
 
-        disbursements.push(disbursement);
-        enrollmentIdsToComplete.push(enrollment.id);
-      }
+        await manager.update(
+          EnrollmentEntity,
+          { id: In(enrollmentIdsToComplete) },
+          { status: EnrollmentStatus.COMPLETED },
+        );
 
-      await manager.save(DisbursementEntity, disbursements);
-
-      await manager.update(
-        InterventionEntity,
-        { id: intervention.id },
-        { budgetSpent: Number(intervention.budgetSpent) + Number(totalAmount) },
-      );
-
-      await manager.update(
-        FundRequestEntity,
-        { id: fundRequest.id },
-        { spentAmount: Number(fundRequest.spentAmount) + Number(totalAmount) },
-      );
-
-      const budgetLine = await manager.findOne(BudgetLineEntity, {
-        where: { id: fundRequest.budgetLine.id },
-      });
-      if (budgetLine) {
-        budgetLine.spentAmount =
-          Number(budgetLine.spentAmount) + Number(totalAmount);
-        budgetLine.remainingAmount =
-          Number(budgetLine.allocatedAmount) -
-          Number(budgetLine.committedAmount);
-        await manager.save(BudgetLineEntity, budgetLine);
-      }
-
-      await manager.update(
-        EnrollmentEntity,
-        { id: In(enrollmentIdsToComplete) },
-        { status: EnrollmentStatus.COMPLETED },
-      );
-
-      /* return await manager
+        /* return await manager
         .createQueryBuilder(DisbursementEntity, 'disbursement')
         .leftJoinAndSelect('disbursement.intervention', 'intervention')
         .leftJoinAndSelect('disbursement.beneficiary', 'beneficiary')
@@ -531,13 +541,16 @@ export class DisbursementsService {
         .where('disbursement.batchNumber = :batchNumber', { batchNumber })
         .getMany(); */
 
-      return await manager
-        .createQueryBuilder(DisbursementEntity, 'disbursement')
-        .leftJoin('disbursement.createdBy', 'createdBy')
-        .addSelect(['createdBy.id', 'createdBy.email', 'createdBy.full_name'])
-        .where('disbursement.batchNumber = :batchNumber', { batchNumber })
-        .getMany();
-    });
+        return await manager
+          .createQueryBuilder(DisbursementEntity, 'disbursement')
+          .leftJoin('disbursement.createdBy', 'createdBy')
+          .addSelect(['createdBy.id', 'createdBy.email', 'createdBy.full_name'])
+          .where('disbursement.batchNumber = :batchNumber', { batchNumber })
+          .getMany();
+      },
+    );
+    this.dashboardCache.invalidate();
+    return pendingBatchResult;
   }
 
   async findAll(filters?: {
@@ -618,7 +631,9 @@ export class DisbursementsService {
       }
     }
 
-    return await this.disbursementRepository.save(disbursement);
+    const saved = await this.disbursementRepository.save(disbursement);
+    this.dashboardCache.invalidate();
+    return saved;
   }
 
   async getRecent(limit: number = 10): Promise<DisbursementEntity[]> {
