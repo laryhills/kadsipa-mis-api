@@ -19,6 +19,7 @@ import { UploadNotificationEntity } from './entities/upload-notification.entity'
 import { UploadNotificationsService } from './upload-notifications.service';
 import { UploadNotificationsController } from './upload-notifications.controller';
 import { RolesModule } from '../roles/roles.module';
+import { createBullMqDefaultJobOptions } from '../../config/bullmq-default-job-options';
 
 @Module({})
 export class NotificationsModule implements OnModuleInit {
@@ -48,16 +49,18 @@ export class NotificationsModule implements OnModuleInit {
           connection: {
             host: configService.get('REDIS_HOST', 'localhost'),
             port: configService.get('REDIS_PORT', 6379),
-          },
-          defaultJobOptions: {
-            removeOnComplete: true,
-            removeOnFail: 1000,
+            maxRetriesPerRequest: null,
           },
         }),
         inject: [ConfigService],
       }),
-      BullModule.registerQueue({
+      BullModule.registerQueueAsync({
         name: EMAIL_QUEUE,
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          defaultJobOptions: createBullMqDefaultJobOptions(configService),
+        }),
+        inject: [ConfigService],
       }),
       MongooseModule.forFeature([
         { name: QueueFailureLog.name, schema: QueueFailureLogSchema },

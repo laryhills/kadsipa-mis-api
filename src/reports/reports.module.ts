@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
+import { createBullMqDefaultJobOptions } from '../../config/bullmq-default-job-options';
 import { ReportsService } from './reports.service';
 import { ReportsController } from './reports.controller';
 import { ReportEntity } from './entities/report.entity';
@@ -23,8 +25,13 @@ import { RolesModule } from '../roles/roles.module';
       BudgetLineEntity,
       EnrollmentEntity,
     ]),
-    BullModule.registerQueue({
+    BullModule.registerQueueAsync({
       name: 'reports',
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        defaultJobOptions: createBullMqDefaultJobOptions(configService),
+      }),
+      inject: [ConfigService],
     }),
     RolesModule,
   ],
