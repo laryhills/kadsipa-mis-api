@@ -29,6 +29,7 @@ import { FundRequestsModule } from './fund-requests/fund-requests.module';
 import { DataReviewModule } from './data-review/data-review.module';
 import { ReportsModule } from './reports/reports.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -102,6 +103,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     DataReviewModule,
     ReportsModule,
     DashboardModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
