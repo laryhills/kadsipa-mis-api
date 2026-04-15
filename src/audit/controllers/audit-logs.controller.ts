@@ -2,9 +2,9 @@ import { Controller, Get, Query, Param, UseGuards } from '@nestjs/common';
 import { AuditLogsService } from '../services/audit-logs.service';
 import { QueryAuditLogDto } from '../dto/query-audit-log.dto';
 import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
-import { successResponse } from '@/common/response.helper';
+import { successResponse } from '@/common';
 
-@Controller('audit-logs')
+@Controller({ version: '1', path: 'audit-logs' })
 @UseGuards(PassportJwtGuard)
 export class AuditLogsController {
   constructor(private readonly auditLogsService: AuditLogsService) {}

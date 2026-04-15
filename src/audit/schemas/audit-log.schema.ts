@@ -7,7 +7,7 @@ export class AuditLog extends Document {
   @Prop({ required: false })
   userId?: string;
 
-  @Prop({ required: true })
+  @Prop({ type: String, enum: AuditAction, required: true })
   action: AuditAction;
 
   @Prop({ required: false })
@@ -31,7 +31,7 @@ export class AuditLog extends Document {
   @Prop({ required: false })
   userAgent?: string;
 
-  @Prop({ default: AuditStatus.SUCCESS })
+  @Prop({ type: String, enum: AuditStatus, default: AuditStatus.SUCCESS })
   status: AuditStatus;
 
   createdAt?: Date;

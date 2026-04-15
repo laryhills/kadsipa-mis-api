@@ -8,15 +8,9 @@ import {
   Inject,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { RequestWithUserInterface } from '../interfaces/request-inteface';
 import { createResponse } from '../response.helper';
-
-interface RequestWithUser extends Request {
-  user?: {
-    id: string;
-    email: string;
-  };
-}
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -26,7 +20,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
-    const req = ctx.getRequest<RequestWithUser>();
+    const req = ctx.getRequest<RequestWithUserInterface>();
     const res = ctx.getResponse<Response>();
 
     const { status, message } = this.normalizeException(exception);

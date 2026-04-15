@@ -5,6 +5,9 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -20,10 +23,12 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prepare": "husky install",
     "typeorm": "typeorm-ts-node-commonjs -d config/data-source.ts",
-    "db:drop": "npm run typeorm schema:drop",
-    "db:create": "npm run typeorm migration:generate migrations/$npm_config_name",
-    "db:migrate": "npm run typeorm migration:run",
-    "db:revert": "npm run typeorm migration:revert"
+    "migration:generate": "npm run typeorm migration:generate",
+    "migration:create": "npm run typeorm migration:create",
+    "migration:run": "npm run typeorm migration:run",
+    "migration:revert": "npm run typeorm migration:revert",
+    "migration:show": "npm run typeorm migration:show",
+    "db:drop": "npm run typeorm schema:drop"
   },
   "lint-staged": {
     "*.{ts}": [
@@ -36,6 +41,7 @@
     "@bull-board/express": "^6.17.0",
     "@bull-board/nestjs": "^6.17.0",
     "@nestjs/bullmq": "^11.0.4",
+    "@nestjs/cache-manager": "^3.1.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
@@ -47,20 +53,27 @@
     "@nestjs/schedule": "^6.1.1",
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.0",
+    "@types/pdfkit": "^0.17.5",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.67.3",
+    "cache-manager": "^7.2.8",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
+    "csv-parser": "^3.2.0",
+    "exceljs": "^4.4.0",
     "ioredis": "^5.9.2",
     "mongodb": "^6.21.0",
     "mongoose": "^9.1.6",
     "nodemailer": "^8.0.1",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
+    "pdfkit": "^0.18.0",
     "pg": "^8.17.2",
+    "puppeteer": "^24.40.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm": "^0.3.28"
+    "typeorm": "^0.3.28",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -71,6 +84,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
+    "@types/multer": "^2.1.0",
     "@types/node": "^22.10.7",
     "@types/nodemailer": "^7.0.9",
     "@types/passport-jwt": "^4.0.1",

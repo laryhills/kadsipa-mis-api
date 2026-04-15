@@ -4,15 +4,17 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { hashPassword } from '@/common/utils/hash.util';
+import { hashPassword } from '../../common/utils/hash.util';
 
 export enum UserStatus {
   ACTIVE = 'active',
   INACTIVE = 'inactive',
   SUSPENDED = 'suspended',
+  PENDING = 'pending',
 }
 
 @Entity('users')
@@ -46,6 +48,9 @@ export class UserEntity {
 
   @Column({ nullable: true })
   deleted_at: Date;
+
+  @OneToMany('UserRoleEntity', 'user')
+  userRoles: any[];
 
   @BeforeInsert()
   @BeforeUpdate()

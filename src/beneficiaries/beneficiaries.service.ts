@@ -8,9 +8,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
-import { BeneficiaryEntity } from './entities/beneficiary.entity';
-import { UUID_REGEX } from '@/common/constants';
-import { PaginatedResponse } from '@/common/interfaces/paginated-response.interface';
+import {
+  BeneficiaryEntity,
+  BeneficiaryType,
+} from './entities/beneficiary.entity';
+import { UUID_REGEX } from '../common/constants';
+import { PaginatedResponse } from '../common/interfaces/paginated-response.interface';
 
 @Injectable()
 export class BeneficiariesService {
@@ -76,6 +79,43 @@ export class BeneficiariesService {
     };
   }
 
+  async findAllByIntervention(
+    interventionId: string,
+    includeDeleted = false,
+    limit = 10,
+    page = 1,
+  ): Promise<PaginatedResponse<BeneficiaryEntity>> {
+    if (!UUID_REGEX.test(interventionId)) {
+      throw new BadRequestException('Invalid intervention ID');
+    }
+
+    const qb = this.beneficiaryRepository
+      .createQueryBuilder('beneficiary')
+      .innerJoinAndSelect(
+        'beneficiary.enrollments',
+        'enrollment',
+        'enrollment.intervention_id = :interventionId',
+        { interventionId },
+      );
+
+    if (!includeDeleted) {
+      qb.andWhere('beneficiary.deleted_at IS NULL');
+    }
+
+    qb.orderBy('beneficiary.created_at', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+    };
+  }
+
   async findOne(id: string): Promise<BeneficiaryEntity> {
     if (!UUID_REGEX.test(id)) {
       throw new BadRequestException('Invalid beneficiary ID');
@@ -91,6 +131,58 @@ export class BeneficiariesService {
     }
 
     return beneficiary;
+  }
+
+  async findByNIN(nin: string): Promise<BeneficiaryEntity | null> {
+    const beneficiary = await this.beneficiaryRepository.findOne({
+      where: { nidhh: nin, deleted_at: IsNull() },
+    });
+
+    return beneficiary;
+  }
+
+  async createOne(
+    createBeneficiaryDto: CreateBeneficiaryDto | Record<string, string>,
+    userId?: string,
+  ): Promise<BeneficiaryEntity> {
+    const nin =
+      'nidhh' in createBeneficiaryDto
+        ? createBeneficiaryDto.nidhh
+        : 'nin' in createBeneficiaryDto
+          ? createBeneficiaryDto.nin
+          : undefined;
+
+    if (!nin) {
+      throw new BadRequestException('NIN/NIDHH is required');
+    }
+
+    const existing = await this.beneficiaryRepository.findOne({
+      where: { nidhh: nin },
+    });
+
+    if (existing) {
+      throw new ConflictException('Beneficiary with this NIN already exists');
+    }
+
+    // Provide defaults for required fields not typically in CSV uploads
+    const beneficiaryData: Partial<BeneficiaryEntity> = {
+      ...createBeneficiaryDto,
+      nidhh: nin,
+      beneficiary_type:
+        'beneficiary_type' in createBeneficiaryDto &&
+        createBeneficiaryDto.beneficiary_type
+          ? (createBeneficiaryDto.beneficiary_type as BeneficiaryType)
+          : BeneficiaryType.INDIVIDUAL,
+      community:
+        'community' in createBeneficiaryDto && createBeneficiaryDto.community
+          ? createBeneficiaryDto.community
+          : 'Not Specified',
+      created_by: userId,
+    };
+
+    const beneficiary = this.beneficiaryRepository.create(beneficiaryData);
+
+    return await this.beneficiaryRepository.save(beneficiary);
   }
 
   async update(

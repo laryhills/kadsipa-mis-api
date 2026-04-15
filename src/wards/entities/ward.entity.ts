@@ -7,7 +7,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { LgaEntity } from '@/lgas/entities/lga.entity';
+import { LgaEntity } from '../../lgas/entities/lga.entity';
 
 @Entity('wards')
 export class WardEntity {

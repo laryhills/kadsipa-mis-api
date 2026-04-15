@@ -12,7 +12,9 @@ type AuthInput = {
 export type LoginData = Pick<
   UserEntity,
   'id' | 'email' | 'full_name' | 'status'
->;
+> & {
+  requirePasswordChange?: boolean;
+};
 
 export type TokenPair = {
   accessToken: string;
@@ -51,8 +53,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // check if user is active
-    if (user.status !== UserStatus.ACTIVE) {
+    // Allow ACTIVE and PENDING users (PENDING = first login with temporary password)
+    if (
+      user.status !== UserStatus.ACTIVE &&
+      user.status !== UserStatus.PENDING
+    ) {
       throw new UnauthorizedException('Account is not active');
     }
 
@@ -66,6 +71,7 @@ export class AuthService {
         email: user.email,
         full_name: user.full_name,
         status: user.status,
+        requirePasswordChange: user.status === UserStatus.PENDING,
       };
     }
     return null;

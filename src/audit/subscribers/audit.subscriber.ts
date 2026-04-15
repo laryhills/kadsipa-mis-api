@@ -39,6 +39,10 @@ export class AuditSubscriber implements EntitySubscriberInterface {
     newValues?: Record<string, unknown> | null,
   ): Promise<void> {
     try {
+      if (!entity?.constructor?.name) {
+        return;
+      }
+
       const entityName = entity.constructor.name.replace('Entity', '');
 
       if (this.shouldSkipAudit(entityName) || !this.auditLogModel) {
@@ -73,6 +77,9 @@ export class AuditSubscriber implements EntitySubscriberInterface {
   }
 
   afterInsert(event: InsertEvent<AuditableEntity>): void {
+    if (!event.entity) {
+      return;
+    }
     void this.createAuditLog(
       AuditAction.CREATE,
       event.entity,

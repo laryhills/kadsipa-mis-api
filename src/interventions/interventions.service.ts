@@ -7,11 +7,11 @@ import {
 import { CreateInterventionDto } from './dto/create-intervention.dto';
 import { UpdateInterventionDto } from './dto/update-intervention.dto';
 import { In, IsNull, Repository } from 'typeorm';
-import { InterventionEntity } from '@/interventions/entities/intervention.entity';
+import { InterventionEntity } from './entities/intervention.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LgaEntity } from '@/lgas/entities/lga.entity';
-import { UUID_REGEX } from '@/common/constants';
-import { PaginatedResponse } from '@/common/interfaces/paginated-response.interface';
+import { LgaEntity } from '../lgas/entities/lga.entity';
+import { UUID_REGEX } from '../common/constants';
+import { PaginatedResponse } from '../common/interfaces/paginated-response.interface';
 
 @Injectable()
 export class InterventionsService {
@@ -23,7 +23,14 @@ export class InterventionsService {
   ) {}
 
   async create(@Body() createInterventionDto: CreateInterventionDto) {
-    const { lga_ids, ...interventionData } = createInterventionDto;
+    const {
+      lga_ids,
+      funding_source,
+      intervention_type,
+      report_frequency,
+      budget_allocated,
+      ...interventionData
+    } = createInterventionDto;
 
     const lgas = await this.lgaRepository.findBy({ id: In(lga_ids) });
 
@@ -54,6 +61,10 @@ export class InterventionsService {
 
         const intervention = this.interventionRepository.create({
           ...interventionData,
+          budgetAllocated: budget_allocated,
+          fundingSource: funding_source,
+          interventionType: intervention_type,
+          reportFrequency: report_frequency,
           lgas,
           program_code,
         });
@@ -127,7 +138,13 @@ export class InterventionsService {
       throw new NotFoundException(`Intervention with ID ${id} not found`);
     }
 
-    const { lga_ids, ...interventionData } = updateInterventionDto;
+    const {
+      lga_ids,
+      funding_source,
+      intervention_type,
+      report_frequency,
+      ...interventionData
+    } = updateInterventionDto;
 
     if (lga_ids) {
       const lgas = await this.lgaRepository.findBy({ id: In(lga_ids) });
@@ -141,6 +158,17 @@ export class InterventionsService {
       }
 
       intervention.lgas = lgas;
+    }
+
+    // Map snake_case to camelCase
+    if (funding_source !== undefined) {
+      intervention.fundingSource = funding_source;
+    }
+    if (intervention_type !== undefined) {
+      intervention.interventionType = intervention_type;
+    }
+    if (report_frequency !== undefined) {
+      intervention.reportFrequency = report_frequency;
     }
 
     Object.assign(intervention, interventionData);
@@ -165,5 +193,19 @@ export class InterventionsService {
 
     await this.interventionRepository.softDelete(intervention.id);
     return intervention;
+  }
+
+  async updateFormSchema(
+    id: string,
+    formSchema: Record<string, unknown>,
+  ): Promise<InterventionEntity> {
+    const intervention = await this.findOne(id);
+    intervention.formSchema = formSchema;
+    return await this.interventionRepository.save(intervention);
+  }
+
+  async getFormSchema(id: string): Promise<Record<string, unknown>> {
+    const intervention = await this.findOne(id);
+    return intervention.formSchema || {};
   }
 }

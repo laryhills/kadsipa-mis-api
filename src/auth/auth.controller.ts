@@ -1,8 +1,4 @@
-import {
-  AuthService,
-  type LoginData,
-  type LoginResponse,
-} from '@/auth/auth.service';
+import { AuthService, type LoginData } from '@/auth/auth.service';
 import {
   BadRequestException,
   Body,
@@ -26,6 +22,7 @@ import { OtpService } from './services/otp.service';
 import { RefreshTokenService } from './services/refresh-token.service';
 import { RateLimiterService } from './services/rate-limiter.service';
 import { LoginDto, VerifyOtpDto, ResendOtpDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { OtpType } from './entities/otp.entity';
 import { UsersService } from '@/users/users.service';
 import { UserStatus } from '@/users/entities/user.entity';
@@ -33,7 +30,7 @@ import { TooManyRequestsException } from '@/common/exceptions/too-many-requests.
 
 export type RequestWithUser = ExpressRequest & { user: LoginData };
 
-@Controller('auth')
+@Controller({ version: '1', path: 'auth' })
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
@@ -90,7 +87,11 @@ export class AuthController {
       verifyOtpDto.email,
     );
 
-    if (!userEntity || userEntity.status !== UserStatus.ACTIVE) {
+    if (
+      !userEntity ||
+      (userEntity.status !== UserStatus.ACTIVE &&
+        userEntity.status !== UserStatus.PENDING)
+    ) {
       throw new BadRequestException('Invalid email or inactive account');
     }
 
@@ -105,6 +106,7 @@ export class AuthController {
       email: userEntity.email,
       full_name: userEntity.full_name,
       status: userEntity.status,
+      requirePasswordChange: userEntity.status === UserStatus.PENDING,
     };
 
     const accessToken = this.authService.generateAccessToken(user);
@@ -118,8 +120,17 @@ export class AuthController {
 
     await this.authService.login(user);
 
-    const response: LoginResponse = {
-      ...user,
+    const userWithRoles =
+      await this.usersService.getUserWithRolesAndPermissions(userEntity.id);
+
+    const response = {
+      id: user.id,
+      email: user.email,
+      full_name: user.full_name,
+      status: user.status,
+      requirePasswordChange: user.requirePasswordChange,
+      roles: userWithRoles.roles,
+      permissions: userWithRoles.allPermissions,
       accessToken,
       refreshToken,
     };
@@ -144,7 +155,11 @@ export class AuthController {
       resendOtpDto.email,
     );
 
-    if (!userEntity || userEntity.status !== UserStatus.ACTIVE) {
+    if (
+      !userEntity ||
+      (userEntity.status !== UserStatus.ACTIVE &&
+        userEntity.status !== UserStatus.PENDING)
+    ) {
       throw new BadRequestException('Invalid email or inactive account');
     }
 
@@ -197,12 +212,12 @@ export class AuthController {
     });
   }
 
-  @HttpCode(HttpStatus.OK)
+  /*   @HttpCode(HttpStatus.OK)
   @Get('me')
   @UseGuards(PassportJwtGuard)
   getUserInfo(@Request() req: RequestWithUser) {
     return successResponse('User fetched successfully', req.user);
-  }
+  } */
 
   @HttpCode(HttpStatus.OK)
   @Post('logout')
@@ -216,6 +231,36 @@ export class AuthController {
     }
 
     return successResponse('Logout successful', null);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Get('me')
+  @UseGuards(PassportJwtGuard)
+  async getCurrentUser(@Req() req: RequestWithUser) {
+    const userWithRoles =
+      await this.usersService.getUserWithRolesAndPermissions(req.user.id);
+
+    return successResponse('User profile fetched successfully', userWithRoles);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('change-password')
+  @UseGuards(PassportJwtGuard)
+  @Audit(ActivityType.AUTH, 'User changed password')
+  async changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @Req() req: RequestWithUser,
+  ) {
+    await this.usersService.changePassword(
+      req.user.id,
+      changePasswordDto.currentPassword,
+      changePasswordDto.newPassword,
+    );
+
+    return successResponse(
+      'Password changed successfully. You can now login with your new password.',
+      null,
+    );
   }
 
   @HttpCode(HttpStatus.OK)

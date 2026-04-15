@@ -8,9 +8,9 @@ import {
   Unique,
   UpdateDateColumn,
 } from 'typeorm';
-import { InterventionEntity } from '@/interventions/entities/intervention.entity';
-import { BeneficiaryEntity } from '@/beneficiaries/entities/beneficiary.entity';
-import { UserEntity } from '@/users/entities/user.entity';
+import { InterventionEntity } from '../../interventions/entities/intervention.entity';
+import { BeneficiaryEntity } from '../../beneficiaries/entities/beneficiary.entity';
+import { UserEntity } from '../../users/entities/user.entity';
 
 export enum EnrollmentStatus {
   PENDING = 'pending',
@@ -67,8 +67,11 @@ export class EnrollmentEntity {
   })
   status: EnrollmentStatus;
 
-  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: false })
   allocation_amount: number;
+
+  @Column({ type: 'jsonb', nullable: true, name: 'custom_data' })
+  customData: Record<string, unknown>;
 
   @CreateDateColumn()
   created_at: Date;

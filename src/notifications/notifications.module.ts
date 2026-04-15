@@ -5,6 +5,7 @@ import { ExpressAdapter } from '@bull-board/express';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificationService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
 import { EmailProcessor } from './processors/email.processor';
@@ -14,6 +15,11 @@ import {
   QueueFailureLog,
   QueueFailureLogSchema,
 } from './schemas/queue-failure-log.schema';
+import { UploadNotificationEntity } from './entities/upload-notification.entity';
+import { UploadNotificationsService } from './upload-notifications.service';
+import { UploadNotificationsController } from './upload-notifications.controller';
+import { RolesModule } from '../roles/roles.module';
+import { createBullMqDefaultJobOptions } from '../../config/bullmq-default-job-options';
 
 @Module({})
 export class NotificationsModule implements OnModuleInit {
@@ -43,20 +49,24 @@ export class NotificationsModule implements OnModuleInit {
           connection: {
             host: configService.get('REDIS_HOST', 'localhost'),
             port: configService.get('REDIS_PORT', 6379),
-          },
-          defaultJobOptions: {
-            removeOnComplete: true,
-            removeOnFail: 1000,
+            maxRetriesPerRequest: null,
           },
         }),
         inject: [ConfigService],
       }),
-      BullModule.registerQueue({
+      BullModule.registerQueueAsync({
         name: EMAIL_QUEUE,
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          defaultJobOptions: createBullMqDefaultJobOptions(configService),
+        }),
+        inject: [ConfigService],
       }),
       MongooseModule.forFeature([
         { name: QueueFailureLog.name, schema: QueueFailureLogSchema },
       ]),
+      TypeOrmModule.forFeature([UploadNotificationEntity]),
+      RolesModule,
     ];
 
     const bullBoardImports = isDevelopment
@@ -74,10 +84,16 @@ export class NotificationsModule implements OnModuleInit {
 
     return {
       module: NotificationsModule,
+      global: true,
       imports: [...baseImports, ...bullBoardImports],
-      controllers: [NotificationsController],
-      providers: [NotificationService, EmailProcessor, QueueFailureLogger],
-      exports: [NotificationService, BullModule],
+      controllers: [NotificationsController, UploadNotificationsController],
+      providers: [
+        NotificationService,
+        EmailProcessor,
+        QueueFailureLogger,
+        UploadNotificationsService,
+      ],
+      exports: [NotificationService, BullModule, UploadNotificationsService],
     };
   }
 }

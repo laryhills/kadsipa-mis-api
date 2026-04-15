@@ -5,7 +5,7 @@ import { successResponse } from '@/common';
 import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
 import { QueueFailureLog } from './schemas/queue-failure-log.schema';
 
-@Controller('notifications')
+@Controller({ version: '1', path: 'notifications' })
 @UseGuards(PassportJwtGuard)
 export class NotificationsController {
   constructor(

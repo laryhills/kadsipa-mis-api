@@ -19,6 +19,16 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TasksModule } from './tasks/tasks.module';
+import { RolesModule } from './roles/roles.module';
+import { BudgetLinesModule } from './budget-lines/budget-lines.module';
+import { MailModule } from './mail/mail.module';
+import { DisbursementsModule } from './disbursements/disbursements.module';
+import { FiscalYearsModule } from './fiscal-years/fiscal-years.module';
+import { DepartmentsModule } from './departments/departments.module';
+import { FundRequestsModule } from './fund-requests/fund-requests.module';
+import { DataReviewModule } from './data-review/data-review.module';
+import { ReportsModule } from './reports/reports.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -58,9 +68,7 @@ import { TasksModule } from './tasks/tasks.module';
         password: configService.get('DATABASE_PASSWORD'),
         database: configService.get('DATABASE_NAME'),
         entities: [join(__dirname, '..', '**', '*.entity.{ts,js}')],
-        migrations: [join(__dirname, '..', '..', 'migrations', '*.{ts,js}')],
-        // TODO: set to false in production for migrations to work
-        synchronize: true, // must be false in production for migrations to work
+        synchronize: false,
       }),
       inject: [ConfigService],
     }),
@@ -84,6 +92,16 @@ import { TasksModule } from './tasks/tasks.module';
     AuditModule,
     NotificationsModule.forRoot(),
     TasksModule,
+    RolesModule,
+    FiscalYearsModule,
+    DepartmentsModule,
+    BudgetLinesModule,
+    FundRequestsModule,
+    MailModule,
+    DisbursementsModule,
+    DataReviewModule,
+    ReportsModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

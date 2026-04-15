@@ -9,8 +9,8 @@ import { Repository } from 'typeorm';
 import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
 import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
 import { EnrollmentEntity } from './entities/enrollment.entity';
-import { UUID_REGEX } from '@/common/constants';
-import { PaginatedResponse } from '@/common/interfaces/paginated-response.interface';
+import { UUID_REGEX } from '../common/constants';
+import { PaginatedResponse } from '../common/interfaces/paginated-response.interface';
 
 @Injectable()
 export class EnrollmentsService {
@@ -89,13 +89,35 @@ export class EnrollmentsService {
     });
   }
 
-  async findOne(id: string): Promise<EnrollmentEntity> {
-    if (!UUID_REGEX.test(id)) {
+  async findOne(
+    beneficiaryIdOrEnrollmentId: string,
+    interventionId?: string,
+  ): Promise<EnrollmentEntity | null> {
+    if (interventionId) {
+      if (
+        !UUID_REGEX.test(beneficiaryIdOrEnrollmentId) ||
+        !UUID_REGEX.test(interventionId)
+      ) {
+        throw new BadRequestException('Invalid beneficiary or intervention ID');
+      }
+
+      const enrollment = await this.enrollmentRepository.findOne({
+        where: {
+          beneficiary_id: beneficiaryIdOrEnrollmentId,
+          intervention_id: interventionId,
+        },
+        relations: ['intervention', 'beneficiary'],
+      });
+
+      return enrollment;
+    }
+
+    if (!UUID_REGEX.test(beneficiaryIdOrEnrollmentId)) {
       throw new BadRequestException('Invalid enrollment ID');
     }
 
     const enrollment = await this.enrollmentRepository.findOne({
-      where: { id },
+      where: { id: beneficiaryIdOrEnrollmentId },
       relations: ['intervention', 'beneficiary'],
     });
 
@@ -114,7 +136,10 @@ export class EnrollmentsService {
       throw new BadRequestException('Invalid enrollment ID');
     }
 
-    await this.findOne(id);
+    const currentEnrollment = await this.findOne(id);
+    if (!currentEnrollment) {
+      throw new NotFoundException('Enrollment not found');
+    }
 
     if (
       updateEnrollmentDto.intervention_id ||
@@ -126,12 +151,12 @@ export class EnrollmentsService {
         .andWhere('enrollment.intervention_id = :interventionId', {
           interventionId:
             updateEnrollmentDto.intervention_id ||
-            (await this.findOne(id)).intervention_id,
+            currentEnrollment.intervention_id,
         })
         .andWhere('enrollment.beneficiary_id = :beneficiaryId', {
           beneficiaryId:
             updateEnrollmentDto.beneficiary_id ||
-            (await this.findOne(id)).beneficiary_id,
+            currentEnrollment.beneficiary_id,
         })
         .getOne();
 
@@ -142,9 +167,19 @@ export class EnrollmentsService {
       }
     }
 
-    await this.enrollmentRepository.update(id, updateEnrollmentDto);
+    const { customData, ...updateData } = updateEnrollmentDto;
+    await this.enrollmentRepository.update(id, updateData);
 
-    return await this.findOne(id);
+    if (customData !== undefined) {
+      currentEnrollment.customData = customData;
+      await this.enrollmentRepository.save(currentEnrollment);
+    }
+
+    const updated = await this.findOne(id);
+    if (!updated) {
+      throw new NotFoundException('Enrollment not found after update');
+    }
+    return updated;
   }
 
   async remove(id: string): Promise<void> {
@@ -153,6 +188,9 @@ export class EnrollmentsService {
     }
 
     const enrollment = await this.findOne(id);
+    if (!enrollment) {
+      throw new NotFoundException('Enrollment not found');
+    }
 
     await this.enrollmentRepository.remove(enrollment);
   }

@@ -2,6 +2,7 @@ import {
   IsDateString,
   IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -31,6 +32,14 @@ export class CreateEnrollmentDto {
   reason_text?: string;
 
   @IsNumber({ maxDecimalPlaces: 2 })
-  @IsOptional()
+  @IsNotEmpty()
   allocation_amount?: number;
+
+  @IsObject()
+  @IsOptional()
+  customData?: Record<string, unknown>;
+
+  @IsUUID()
+  @IsOptional()
+  created_by?: string;
 }

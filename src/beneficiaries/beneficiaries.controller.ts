@@ -14,8 +14,9 @@ import { CreateBeneficiaryDtoArray } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
 import { createdResponse, successResponse } from '@/common';
+import { RequirePermission } from '@/auth/decorators/require-permission.decorator';
 
-@Controller('beneficiaries')
+@Controller({ version: '1', path: 'beneficiaries' })
 @UseGuards(PassportJwtGuard)
 export class BeneficiariesController {
   constructor(private readonly beneficiariesService: BeneficiariesService) {}
@@ -29,6 +30,7 @@ export class BeneficiariesController {
   }
 
   @Get()
+  @RequirePermission('interventions.viewInterventions')
   async findAll(@Query('includeDeleted') includeDeleted?: string) {
     const beneficiaries = await this.beneficiariesService.findAll(
       includeDeleted === 'true',
@@ -37,6 +39,7 @@ export class BeneficiariesController {
   }
 
   @Get(':id')
+  @RequirePermission('interventions.viewInterventions')
   async findOne(@Param('id') id: string) {
     const beneficiary = await this.beneficiariesService.findOne(id);
     return successResponse('Beneficiary fetched successfully', beneficiary);
