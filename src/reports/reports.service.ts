@@ -13,6 +13,8 @@ import { ReportEntity } from './entities/report.entity';
 import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
 import { QueryReportsDto } from './dto/query-reports.dto';
+import { ReportListSortBy } from './enums/report-list-sort-by.enum';
+import type { SortOrder } from '../common/dto/sort-query.dto';
 import { ReportDetailsResponseDto } from './dto/report-details-response.dto';
 import { ReportStatus } from './enums/report-status.enum';
 import type { ReportJobData } from './processors/reports.processor';
@@ -74,49 +76,60 @@ export class ReportsService {
     page: number;
     limit: number;
   }> {
-    const {
-      search,
-      interventionId,
-      reportType,
-      status,
-      page = 1,
-      limit = 10,
-      sortBy = 'createdAt',
-      sortOrder = 'DESC',
-    } = query;
+    const { search, interventionId, reportType, status } = query;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const sortBy: ReportListSortBy = query.sortBy ?? ReportListSortBy.createdAt;
+    const sortOrder: SortOrder = query.sortOrder ?? 'DESC';
 
-    const whereClause: Record<string, unknown> = {};
+    const qb = this.reportRepository
+      .createQueryBuilder('report')
+      .leftJoinAndSelect('report.intervention', 'intervention')
+      .innerJoin('report.generatedBy', 'generatedBy')
+      .addSelect([
+        'generatedBy.id',
+        'generatedBy.email',
+        'generatedBy.full_name',
+      ]);
 
     if (search) {
-      whereClause.name = ILike(`%${search}%`);
+      qb.andWhere('report.name ILIKE :search', { search: `%${search}%` });
     }
 
     if (interventionId) {
-      whereClause.interventionId = interventionId;
+      qb.andWhere('report.interventionId = :interventionId', {
+        interventionId,
+      });
     }
 
     if (reportType) {
-      whereClause.reportType = reportType;
+      qb.andWhere('report.reportType = :reportType', { reportType });
     }
 
     if (status) {
-      whereClause.status = status;
+      qb.andWhere('report.status = :status', { status });
     }
 
-    const [data, total] = await this.reportRepository.findAndCount({
-      where: whereClause,
-      relations: ['intervention', 'generatedBy'],
-      select: {
-        generatedBy: {
-          id: true,
-          email: true,
-          full_name: true,
-        },
-      },
-      skip: (page - 1) * limit,
-      take: limit,
-      order: { [sortBy]: sortOrder },
-    });
+    switch (sortBy) {
+      case ReportListSortBy.name:
+        qb.orderBy('report.name', sortOrder);
+        break;
+      case ReportListSortBy.intervention:
+        qb.orderBy('intervention.name', sortOrder, 'NULLS LAST');
+        break;
+      case ReportListSortBy.createdAt:
+        qb.orderBy('report.createdAt', sortOrder);
+        break;
+      case ReportListSortBy.status:
+        qb.orderBy('report.status', sortOrder);
+        break;
+      default:
+        qb.orderBy('report.createdAt', 'DESC');
+    }
+
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
 
     return {
       data,

@@ -24,6 +24,8 @@ import { BeneficiariesService } from '../beneficiaries/beneficiaries.service';
 import { DisbursementsService } from '../disbursements/disbursements.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import { QueryInterventionsDto } from './dto/query-interventions.dto';
+import { QueryBeneficiariesDto } from '../beneficiaries/dto/query-beneficiaries.dto';
 
 @Controller({ version: '1', path: 'interventions' })
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -47,8 +49,8 @@ export class InterventionsController {
 
   @Get()
   @RequirePermission('interventions.viewInterventions')
-  async findAll() {
-    const result = await this.interventionsService.findAll();
+  async findAll(@Query() query: QueryInterventionsDto) {
+    const result = await this.interventionsService.findAll(query);
     return successResponse('Interventions fetched successfully', result);
   }
 
@@ -88,18 +90,12 @@ export class InterventionsController {
   @RequirePermission('interventions.viewInterventions')
   async getBeneficiaries(
     @Param('id') id: string,
-    @Query('includeDeleted') includeDeleted?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
+    @Query() query: QueryBeneficiariesDto,
   ) {
     await this.interventionsService.findOne(id);
-    const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : 1;
-    const limitNum = limit ? Math.max(1, parseInt(limit, 10) || 10) : 10;
     const result = await this.beneficiariesService.findAllByIntervention(
       id,
-      includeDeleted === 'true',
-      limitNum,
-      pageNum,
+      query,
     );
     return successResponse('Beneficiaries fetched successfully', result);
   }

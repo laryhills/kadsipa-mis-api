@@ -9,6 +9,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -21,6 +22,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import { QueryUsersDto } from './dto/query-users.dto';
 
 @Controller({ version: '1', path: 'users' })
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -49,8 +51,8 @@ export class UsersController {
 
   @Get()
   @RequirePermission('userManagement.viewUsers')
-  async findAll() {
-    const users = await this.usersService.findAll();
+  async findAll(@Query() query: QueryUsersDto) {
+    const users = await this.usersService.findAll(query);
     return successResponse('Users fetched successfully', users);
   }
 

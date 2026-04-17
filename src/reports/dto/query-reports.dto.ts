@@ -9,8 +9,12 @@ import {
 import { Transform } from 'class-transformer';
 import { ReportType } from '../enums/report-type.enum';
 import { ReportStatus } from '../enums/report-status.enum';
+import { SortOrderQueryDto } from '../../common/dto/sort-query.dto';
+import { ReportListSortBy } from '../enums/report-list-sort-by.enum';
 
-export class QueryReportsDto {
+export { ReportListSortBy } from '../enums/report-list-sort-by.enum';
+
+export class QueryReportsDto extends SortOrderQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
@@ -40,10 +44,6 @@ export class QueryReportsDto {
   limit?: number = 10;
 
   @IsOptional()
-  @IsString()
-  sortBy?: string = 'createdAt';
-
-  @IsOptional()
-  @IsEnum(['ASC', 'DESC'])
-  sortOrder?: 'ASC' | 'DESC' = 'DESC';
+  @IsEnum(ReportListSortBy)
+  sortBy?: ReportListSortBy = ReportListSortBy.createdAt;
 }

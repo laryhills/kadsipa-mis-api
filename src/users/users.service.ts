@@ -18,6 +18,7 @@ import * as crypto from 'crypto';
 import { comparePassword } from '../common/utils/hash.util';
 import { RolesService } from '@/roles/roles.service';
 import { MailService } from '../mail/mail.service';
+import { QueryUsersDto, UserListSortBy } from './dto/query-users.dto';
 
 @Injectable()
 export class UsersService {
@@ -115,8 +116,34 @@ export class UsersService {
     };
   }
 
-  async findAll(): Promise<UserEntity[]> {
-    return await this.userRepository.find();
+  async findAll(query: QueryUsersDto = {}): Promise<UserEntity[]> {
+    const sortBy = query.sortBy ?? UserListSortBy.name;
+    const sortOrder = query.sortOrder ?? 'ASC';
+
+    const qb = this.userRepository.createQueryBuilder('u');
+
+    switch (sortBy) {
+      case UserListSortBy.name:
+        qb.orderBy('u.full_name', sortOrder);
+        break;
+      case UserListSortBy.status:
+        qb.orderBy('u.status', sortOrder);
+        break;
+      case UserListSortBy.lastActive:
+        qb.orderBy('u.last_login_at', sortOrder, 'NULLS LAST');
+        break;
+      case UserListSortBy.role:
+        qb.addSelect(
+          `(SELECT r.name FROM user_roles ur INNER JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id ORDER BY ur.assigned_at ASC LIMIT 1)`,
+          'first_role_name',
+        );
+        qb.orderBy('first_role_name', sortOrder, 'NULLS LAST');
+        break;
+      default:
+        qb.orderBy('u.full_name', 'ASC');
+    }
+
+    return qb.getMany();
   }
 
   async findOneByEmail(email: string): Promise<UserEntity | null> {

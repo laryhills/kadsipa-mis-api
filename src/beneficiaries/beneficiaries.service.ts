@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import {
@@ -14,6 +14,11 @@ import {
 } from './entities/beneficiary.entity';
 import { UUID_REGEX } from '../common/constants';
 import { PaginatedResponse } from '../common/interfaces/paginated-response.interface';
+import {
+  BeneficiaryListSortBy,
+  QueryBeneficiariesDto,
+} from './dto/query-beneficiaries.dto';
+import { DisbursementStatus } from '../disbursements/entities/disbursement.entity';
 
 @Injectable()
 export class BeneficiariesService {
@@ -55,21 +60,28 @@ export class BeneficiariesService {
   }
 
   async findAll(
-    includeDeleted = false,
-    limit = 10,
-    page = 1,
+    query: QueryBeneficiariesDto,
   ): Promise<PaginatedResponse<BeneficiaryEntity>> {
-    const whereClause = includeDeleted ? undefined : { deleted_at: IsNull() };
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const sortOrder = query.sortOrder ?? 'DESC';
+    const includeDeleted = query.includeDeleted ?? false;
 
-    const [data, total] = await this.beneficiaryRepository.findAndCount({
-      where: whereClause,
-      relations: ['enrollments'],
-      take: limit,
-      skip: (page - 1) * limit,
-      order: {
-        created_at: 'DESC',
-      },
+    const qb = this.beneficiaryRepository
+      .createQueryBuilder('beneficiary')
+      .leftJoinAndSelect('beneficiary.enrollments', 'enrollment');
+
+    if (!includeDeleted) {
+      qb.andWhere('beneficiary.deleted_at IS NULL');
+    }
+
+    this.applyBeneficiarySort(qb, query.sortBy, sortOrder, {
+      allowTotalAmountReceived: true,
     });
+
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
 
     return {
       data,
@@ -81,13 +93,22 @@ export class BeneficiariesService {
 
   async findAllByIntervention(
     interventionId: string,
-    includeDeleted = false,
-    limit = 10,
-    page = 1,
+    query: QueryBeneficiariesDto,
   ): Promise<PaginatedResponse<BeneficiaryEntity>> {
     if (!UUID_REGEX.test(interventionId)) {
       throw new BadRequestException('Invalid intervention ID');
     }
+
+    if (query.sortBy === BeneficiaryListSortBy.totalAmountReceived) {
+      throw new BadRequestException(
+        'sortBy totalAmountReceived is only supported on GET /beneficiaries',
+      );
+    }
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const sortOrder = query.sortOrder ?? 'DESC';
+    const includeDeleted = query.includeDeleted ?? false;
 
     const qb = this.beneficiaryRepository
       .createQueryBuilder('beneficiary')
@@ -102,9 +123,11 @@ export class BeneficiariesService {
       qb.andWhere('beneficiary.deleted_at IS NULL');
     }
 
-    qb.orderBy('beneficiary.created_at', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit);
+    this.applyBeneficiarySort(qb, query.sortBy, sortOrder, {
+      allowTotalAmountReceived: false,
+    });
+
+    qb.skip((page - 1) * limit).take(limit);
 
     const [data, total] = await qb.getManyAndCount();
 
@@ -114,6 +137,56 @@ export class BeneficiariesService {
       page,
       limit,
     };
+  }
+
+  private applyBeneficiarySort(
+    qb: SelectQueryBuilder<BeneficiaryEntity>,
+    sortBy: BeneficiaryListSortBy | undefined,
+    sortOrder: 'ASC' | 'DESC',
+    opts: { allowTotalAmountReceived: boolean },
+  ): void {
+    if (
+      sortBy === BeneficiaryListSortBy.totalAmountReceived &&
+      opts.allowTotalAmountReceived
+    ) {
+      qb.addSelect(
+        `(SELECT COALESCE(SUM(d.amount), 0) FROM disbursements d WHERE d.beneficiary_id = beneficiary.id AND d.status = :paidStatus)`,
+        'total_paid_sum',
+      );
+      qb.setParameter('paidStatus', DisbursementStatus.PAID);
+      qb.orderBy('total_paid_sum', sortOrder);
+      return;
+    }
+
+    if (sortBy === BeneficiaryListSortBy.name) {
+      qb.orderBy('beneficiary.last_name', sortOrder).addOrderBy(
+        'beneficiary.first_name',
+        sortOrder,
+      );
+      return;
+    }
+
+    if (sortBy === BeneficiaryListSortBy.nin) {
+      qb.orderBy('beneficiary.nin', sortOrder);
+      return;
+    }
+
+    if (sortBy === BeneficiaryListSortBy.accountNumber) {
+      qb.orderBy('beneficiary.account_number', sortOrder);
+      return;
+    }
+
+    if (sortBy === BeneficiaryListSortBy.lga) {
+      qb.orderBy('beneficiary.lga', sortOrder, 'NULLS LAST');
+      return;
+    }
+
+    if (sortBy === BeneficiaryListSortBy.ward) {
+      qb.orderBy('beneficiary.ward', sortOrder, 'NULLS LAST');
+      return;
+    }
+
+    qb.orderBy('beneficiary.created_at', 'DESC');
   }
 
   async findOne(id: string): Promise<BeneficiaryEntity> {

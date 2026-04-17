@@ -12,6 +12,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { LgaEntity } from '../lgas/entities/lga.entity';
 import { UUID_REGEX } from '../common/constants';
 import { PaginatedResponse } from '../common/interfaces/paginated-response.interface';
+import { QueryInterventionsDto } from './dto/query-interventions.dto';
+import { FindOptionsOrder } from 'typeorm';
 
 @Injectable()
 export class InterventionsService {
@@ -74,14 +76,22 @@ export class InterventionsService {
     );
   }
 
-  async findAll(limit = 10, page = 1): Promise<PaginatedResponse<any>> {
+  async findAll(query: QueryInterventionsDto): Promise<PaginatedResponse<any>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const sortOrder = query.sortOrder ?? 'DESC';
+
+    const order: FindOptionsOrder<InterventionEntity> = query.sortBy
+      ? ({
+          [query.sortBy]: sortOrder,
+        } as FindOptionsOrder<InterventionEntity>)
+      : { created_at: 'DESC' };
+
     const [results, total] = await this.interventionRepository.findAndCount({
       relations: ['lgas'],
       take: limit,
       skip: (page - 1) * limit,
-      order: {
-        created_at: 'DESC',
-      },
+      order,
     });
 
     const data = results.map((intervention) => ({

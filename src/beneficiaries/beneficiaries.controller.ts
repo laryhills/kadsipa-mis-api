@@ -15,6 +15,7 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
 import { createdResponse, successResponse } from '@/common';
 import { RequirePermission } from '@/auth/decorators/require-permission.decorator';
+import { QueryBeneficiariesDto } from './dto/query-beneficiaries.dto';
 
 @Controller({ version: '1', path: 'beneficiaries' })
 @UseGuards(PassportJwtGuard)
@@ -31,10 +32,8 @@ export class BeneficiariesController {
 
   @Get()
   @RequirePermission('interventions.viewInterventions')
-  async findAll(@Query('includeDeleted') includeDeleted?: string) {
-    const beneficiaries = await this.beneficiariesService.findAll(
-      includeDeleted === 'true',
-    );
+  async findAll(@Query() query: QueryBeneficiariesDto) {
+    const beneficiaries = await this.beneficiariesService.findAll(query);
     return successResponse('Beneficiaries fetched successfully', beneficiaries);
   }
 
