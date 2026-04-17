@@ -21,6 +21,17 @@ interface ActivityLogFilter {
     $lte?: Date;
   };
 }
+
+export interface DashboardRecentActivityItem {
+  id: string;
+  userId?: string;
+  activityType?: ActivityType;
+  description: string;
+  createdAt: string;
+}
+
+const DASHBOARD_OVERVIEW_ACTIVITY_LIMIT = 5;
+
 @Injectable()
 export class ActivityLogsService {
   constructor(
@@ -102,5 +113,33 @@ export class ActivityLogsService {
       .limit(100)
       .lean()
       .exec();
+  }
+
+  async findRecentForDashboard(
+    limit: number = DASHBOARD_OVERVIEW_ACTIVITY_LIMIT,
+  ): Promise<{
+    limit: number;
+    items: DashboardRecentActivityItem[];
+  }> {
+    const clamped = Math.min(50, Math.max(1, limit));
+    const rows = await this.activityLogModel
+      .find({
+        activityType: { $ne: ActivityType.AUTH },
+      })
+      .sort({ createdAt: -1 })
+      .limit(clamped)
+      .lean()
+      .exec();
+
+    return {
+      limit: clamped,
+      items: rows.map((r) => ({
+        id: String(r._id),
+        userId: r.userId,
+        activityType: r.activityType,
+        description: r.description ?? '',
+        createdAt: (r.createdAt ?? new Date()).toISOString(),
+      })),
+    };
   }
 }

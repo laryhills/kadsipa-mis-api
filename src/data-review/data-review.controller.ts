@@ -25,6 +25,8 @@ import { BulkApproveDto } from './dto/bulk-approve.dto';
 import { BulkRejectDto } from './dto/bulk-reject.dto';
 import { PendingBeneficiaryStatus } from './entities/pending-beneficiary.entity';
 import { successResponse } from '../common';
+import { Audit } from '../audit/decorators/audit.decorator';
+import { ActivityType } from '../audit/constants/audit-action.enum';
 
 @Controller({ version: '1', path: 'data-review' })
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -34,6 +36,10 @@ export class DataReviewController {
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   @RequirePermission('interventions.manageBeneficiaries')
+  @Audit(
+    ActivityType.IMPORT,
+    'Beneficiary spreadsheet uploaded for data review',
+  )
   async uploadBeneficiaries(
     @UploadedFile() file: Express.Multer.File,
     @Body() dto: UploadBeneficiariesDto,
@@ -86,6 +92,7 @@ export class DataReviewController {
 
   @Patch('pending/:id/approve')
   @RequirePermission('interventions.manageBeneficiaries')
+  @Audit(ActivityType.DATA_REVIEW, 'Pending beneficiary approved')
   async approve(
     @Param('id') id: string,
     @Body() dto: ApprovePendingDto,
@@ -104,6 +111,7 @@ export class DataReviewController {
 
   @Patch('pending/:id/reject')
   @RequirePermission('interventions.manageBeneficiaries')
+  @Audit(ActivityType.DATA_REVIEW, 'Pending beneficiary rejected')
   async reject(
     @Param('id') id: string,
     @Body() dto: RejectPendingDto,
@@ -122,6 +130,10 @@ export class DataReviewController {
 
   @Post('pending/:id/link')
   @RequirePermission('interventions.manageBeneficiaries')
+  @Audit(
+    ActivityType.DATA_REVIEW,
+    'Pending beneficiary linked to existing record',
+  )
   async linkToExisting(
     @Param('id') id: string,
     @Body() dto: LinkPendingDto,
@@ -137,6 +149,7 @@ export class DataReviewController {
 
   @Post('pending/bulk-approve')
   @RequirePermission('interventions.manageBeneficiaries')
+  @Audit(ActivityType.DATA_REVIEW, 'Pending beneficiaries bulk approved')
   async bulkApprove(
     @Body() dto: BulkApproveDto,
     @CurrentUser() currentUser: JwtPayload,
@@ -154,6 +167,7 @@ export class DataReviewController {
 
   @Post('pending/bulk-reject')
   @RequirePermission('interventions.manageBeneficiaries')
+  @Audit(ActivityType.DATA_REVIEW, 'Pending beneficiaries bulk rejected')
   async bulkReject(
     @Body() dto: BulkRejectDto,
     @CurrentUser() currentUser: JwtPayload,

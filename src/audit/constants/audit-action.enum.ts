@@ -25,4 +25,13 @@ export enum ActivityType {
   IMPORT = 'import',
   API_CALL = 'api_call',
   SYSTEM = 'system',
+  BENEFICIARY = 'beneficiary',
+  INTERVENTION = 'intervention',
+  BUDGET = 'budget',
+  DISBURSEMENT = 'disbursement',
+  DATA_REVIEW = 'data_review',
+  ENROLLMENT = 'enrollment',
+  FUND_REQUEST = 'fund_request',
+  DEPARTMENT = 'department',
+  FISCAL_YEAR = 'fiscal_year',
 }

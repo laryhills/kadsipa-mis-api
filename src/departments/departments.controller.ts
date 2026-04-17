@@ -17,6 +17,8 @@ import { PassportJwtGuard } from '../auth/guards/passport-jwt.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { createdResponse, successResponse } from '../common';
+import { Audit } from '../audit/decorators/audit.decorator';
+import { ActivityType } from '../audit/constants/audit-action.enum';
 
 @Controller({ version: '1', path: 'finance/departments' })
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -25,6 +27,7 @@ export class DepartmentsController {
 
   @Post()
   @RequirePermission('financialManagement.manageBudget')
+  @Audit(ActivityType.DEPARTMENT, 'Department created')
   async create(@Body() createDto: CreateDepartmentDto) {
     const department = await this.departmentsService.create(createDto);
     return createdResponse('Department created successfully', department);

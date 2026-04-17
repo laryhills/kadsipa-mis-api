@@ -26,6 +26,8 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { QueryInterventionsDto } from './dto/query-interventions.dto';
 import { QueryBeneficiariesDto } from '../beneficiaries/dto/query-beneficiaries.dto';
+import { Audit } from '../audit/decorators/audit.decorator';
+import { ActivityType } from '../audit/constants/audit-action.enum';
 
 @Controller({ version: '1', path: 'interventions' })
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -40,6 +42,7 @@ export class InterventionsController {
 
   @Post()
   @RequirePermission('interventions.createIntervention')
+  @Audit(ActivityType.INTERVENTION, 'Intervention created')
   async create(@Body() createInterventionDto: CreateInterventionDto) {
     const result = await this.interventionsService.create(
       createInterventionDto,
@@ -103,6 +106,10 @@ export class InterventionsController {
   @Post(':id/disburse')
   @RequirePermission('financialManagement.manageBudget')
   @HttpCode(HttpStatus.CREATED)
+  @Audit(
+    ActivityType.DISBURSEMENT,
+    'Disbursement batch created for intervention pending enrollments',
+  )
   async disburse(
     @Param('id') id: string,
     @Body() body: { referenceNumber?: string },
@@ -126,6 +133,7 @@ export class InterventionsController {
 
   @Patch(':id')
   @RequirePermission('interventions.editIntervention')
+  @Audit(ActivityType.INTERVENTION, 'Intervention updated')
   async update(
     @Param('id') id: string,
     @Body() updateInterventionDto: UpdateInterventionDto,
@@ -139,6 +147,7 @@ export class InterventionsController {
 
   @Delete(':id')
   @RequirePermission('interventions.editIntervention')
+  @Audit(ActivityType.INTERVENTION, 'Intervention deleted')
   async remove(@Param('id') id: string) {
     const result = await this.interventionsService.remove(id);
     return successResponse('Intervention deleted successfully', result);

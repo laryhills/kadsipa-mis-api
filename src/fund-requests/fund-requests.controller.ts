@@ -22,6 +22,8 @@ import { RequirePermission } from '../auth/decorators/require-permission.decorat
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { createdResponse, successResponse } from '../common';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import { Audit } from '../audit/decorators/audit.decorator';
+import { ActivityType } from '../audit/constants/audit-action.enum';
 
 @Controller({ version: '1', path: 'finance/fund-requests' })
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -30,6 +32,7 @@ export class FundRequestsController {
 
   @Post()
   @RequirePermission('financialManagement.manageBudget')
+  @Audit(ActivityType.FUND_REQUEST, 'Fund request created')
   async create(
     @Body() createDto: CreateFundRequestDto,
     @CurrentUser() currentUser: JwtPayload,
@@ -90,6 +93,7 @@ export class FundRequestsController {
 
   @Patch(':id')
   @RequirePermission('financialManagement.manageBudget')
+  @Audit(ActivityType.FUND_REQUEST, 'Fund request updated')
   async update(
     @Param('id') id: string,
     @Body() updateDto: UpdateFundRequestDto,

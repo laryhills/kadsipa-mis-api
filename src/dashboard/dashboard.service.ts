@@ -11,6 +11,7 @@ import {
   TopListQueryDto,
 } from './dto/dashboard-queries.dto';
 import { DashboardCacheService } from './dashboard-cache.service';
+import { ActivityLogsService } from '../audit/services/activity-logs.service';
 
 const OVERVIEW_CACHE_MS = 120_000;
 const TOP_CACHE_MS = 120_000;
@@ -27,6 +28,7 @@ export class DashboardService {
     @Inject(CACHE_MANAGER)
     private readonly cache: Cache,
     private readonly dashboardCache: DashboardCacheService,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   private toNum(v: unknown): number {
@@ -55,32 +57,46 @@ export class DashboardService {
   }
 
   async getOverview() {
-    return this.cached(
-      'dashboard:overview:v1',
-      async () => {
-        const [
-          [interventionRow],
-          demoRow,
-          interventionBudgetRow,
-          orgBudgetRow,
-          disbursedRow,
-          pendingRow,
-        ] = await Promise.all([
-          this.dataSource.query<{ count: string }[]>(
-            `SELECT COUNT(*)::text AS count FROM interventions WHERE deleted_at IS NULL`,
-          ),
-          this.dataSource.query<
-            {
-              total: string;
-              male: string;
-              female: string;
-              other: string;
-              unknown_gender: string;
-              with_disability: string;
-              without_disability: string;
-            }[]
-          >(
-            `SELECT
+    const [stats, recentActivity] = await Promise.all([
+      this.cached(
+        'dashboard:overview:v1',
+        () => this.buildOverviewStatistics(),
+        OVERVIEW_CACHE_MS,
+      ),
+      this.cached(
+        'dashboard:overview:recentActivity:v1',
+        () => this.activityLogsService.findRecentForDashboard(),
+        RECENT_CACHE_MS,
+      ),
+    ]);
+
+    return { ...stats, recentActivity };
+  }
+
+  private async buildOverviewStatistics() {
+    const [
+      [interventionRow],
+      demoRow,
+      interventionBudgetRow,
+      orgBudgetRow,
+      disbursedRow,
+      pendingRow,
+    ] = await Promise.all([
+      this.dataSource.query<{ count: string }[]>(
+        `SELECT COUNT(*)::text AS count FROM interventions WHERE deleted_at IS NULL`,
+      ),
+      this.dataSource.query<
+        {
+          total: string;
+          male: string;
+          female: string;
+          other: string;
+          unknown_gender: string;
+          with_disability: string;
+          without_disability: string;
+        }[]
+      >(
+        `SELECT
               COUNT(DISTINCT b.id)::text AS total,
               COUNT(DISTINCT b.id) FILTER (WHERE b.gender = 'Male')::text AS male,
               COUNT(DISTINCT b.id) FILTER (WHERE b.gender = 'Female')::text AS female,
@@ -91,59 +107,56 @@ export class DashboardService {
             FROM beneficiaries b
             INNER JOIN intervention_enrollments e ON e.beneficiary_id = b.id
             WHERE b.deleted_at IS NULL`,
-          ),
-          this.dataSource.query<{ intervention_total: string }[]>(
-            `SELECT COALESCE(SUM(budget_allocated), 0)::text AS intervention_total
+      ),
+      this.dataSource.query<{ intervention_total: string }[]>(
+        `SELECT COALESCE(SUM(budget_allocated), 0)::text AS intervention_total
              FROM interventions WHERE deleted_at IS NULL`,
-          ),
-          this.dataSource.query<{ org_budget: string }[]>(
-            `SELECT COALESCE(SUM(allocated_amount), 0)::text AS org_budget
+      ),
+      this.dataSource.query<{ org_budget: string }[]>(
+        `SELECT COALESCE(SUM(allocated_amount), 0)::text AS org_budget
              FROM budget_lines WHERE is_active = true`,
-          ),
-          this.dataSource.query<{ total: string }[]>(
-            `SELECT COALESCE(SUM(amount), 0)::text AS total
+      ),
+      this.dataSource.query<{ total: string }[]>(
+        `SELECT COALESCE(SUM(amount), 0)::text AS total
              FROM disbursements WHERE status = $1`,
-            [DisbursementStatus.PAID],
-          ),
-          this.dataSource.query<{ count: string }[]>(
-            `SELECT COUNT(*)::text AS count FROM pending_beneficiaries WHERE status = $1`,
-            [PendingBeneficiaryStatus.PENDING_REVIEW],
-          ),
-        ]);
+        [DisbursementStatus.PAID],
+      ),
+      this.dataSource.query<{ count: string }[]>(
+        `SELECT COUNT(*)::text AS count FROM pending_beneficiaries WHERE status = $1`,
+        [PendingBeneficiaryStatus.PENDING_REVIEW],
+      ),
+    ]);
 
-        const demo = demoRow[0];
+    const demo = demoRow[0];
 
-        return {
-          interventions: {
-            total: this.toNum(interventionRow?.count),
-          },
-          beneficiaries: {
-            totalEnrolled: this.toNum(demo?.total),
-            byGender: {
-              male: this.toNum(demo?.male),
-              female: this.toNum(demo?.female),
-              other: this.toNum(demo?.other),
-              unknown: this.toNum(demo?.unknown_gender),
-            },
-            byDisability: {
-              withDisability: this.toNum(demo?.with_disability),
-              withoutDisability: this.toNum(demo?.without_disability),
-            },
-          },
-          budget: {
-            interventionsAllocated: this.toNum(
-              interventionBudgetRow[0]?.intervention_total,
-            ),
-            organizationAllocated: this.toNum(orgBudgetRow[0]?.org_budget),
-            totalDisbursed: this.toNum(disbursedRow[0]?.total),
-          },
-          pendingVerification: {
-            pendingBeneficiaryReviews: this.toNum(pendingRow[0]?.count),
-          },
-        };
+    return {
+      interventions: {
+        total: this.toNum(interventionRow?.count),
       },
-      OVERVIEW_CACHE_MS,
-    );
+      beneficiaries: {
+        totalEnrolled: this.toNum(demo?.total),
+        byGender: {
+          male: this.toNum(demo?.male),
+          female: this.toNum(demo?.female),
+          other: this.toNum(demo?.other),
+          unknown: this.toNum(demo?.unknown_gender),
+        },
+        byDisability: {
+          withDisability: this.toNum(demo?.with_disability),
+          withoutDisability: this.toNum(demo?.without_disability),
+        },
+      },
+      budget: {
+        interventionsAllocated: this.toNum(
+          interventionBudgetRow[0]?.intervention_total,
+        ),
+        organizationAllocated: this.toNum(orgBudgetRow[0]?.org_budget),
+        totalDisbursed: this.toNum(disbursedRow[0]?.total),
+      },
+      pendingVerification: {
+        pendingBeneficiaryReviews: this.toNum(pendingRow[0]?.count),
+      },
+    };
   }
 
   async getTopInterventions(query: TopListQueryDto) {
