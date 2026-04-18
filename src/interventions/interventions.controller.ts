@@ -26,6 +26,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { QueryInterventionsDto } from './dto/query-interventions.dto';
 import { QueryBeneficiariesDto } from '../beneficiaries/dto/query-beneficiaries.dto';
+import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { Audit } from '../audit/decorators/audit.decorator';
 import { ActivityType } from '../audit/constants/audit-action.enum';
 
@@ -38,6 +39,7 @@ export class InterventionsController {
     private readonly dataReviewService: DataReviewService,
     private readonly beneficiariesService: BeneficiariesService,
     private readonly disbursementsService: DisbursementsService,
+    private readonly enrollmentsService: EnrollmentsService,
   ) {}
 
   @Post()
@@ -129,6 +131,21 @@ export class InterventionsController {
         disbursements,
       },
     );
+  }
+
+  @Delete(':id/beneficiaries/:beneficiaryId')
+  @RequirePermission('interventions.editIntervention')
+  @Audit(ActivityType.ENROLLMENT, 'Beneficiary removed from intervention')
+  async removeBeneficiary(
+    @Param('id') id: string,
+    @Param('beneficiaryId') beneficiaryId: string,
+  ) {
+    await this.interventionsService.findOne(id);
+    await this.enrollmentsService.removeByInterventionAndBeneficiary(
+      id,
+      beneficiaryId,
+    );
+    return successResponse('Beneficiary removed from intervention', null);
   }
 
   @Patch(':id')
