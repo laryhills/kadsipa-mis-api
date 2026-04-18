@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, ILike, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import csvParser from 'csv-parser';
 import * as XLSX from 'xlsx';
 import { Readable } from 'stream';
@@ -21,7 +21,7 @@ import { NotificationType } from '../notifications/entities/upload-notification.
 import type { ApprovePendingDto } from './dto/approve-pending.dto';
 import type { RejectPendingDto } from './dto/reject-pending.dto';
 import type { LinkPendingDto } from './dto/link-pending.dto';
-import { LgaEntity } from '@/lgas/entities/lga.entity';
+import { LgasService } from '../lgas/lgas.service';
 import { DashboardCacheService } from '../dashboard/dashboard-cache.service';
 
 export interface UploadResult {
@@ -70,8 +70,7 @@ export class DataReviewService {
   constructor(
     @InjectRepository(PendingBeneficiaryEntity)
     private readonly pendingBeneficiaryRepository: Repository<PendingBeneficiaryEntity>,
-    @InjectRepository(LgaEntity)
-    private readonly lgaRepository: Repository<LgaEntity>,
+    private readonly lgasService: LgasService,
     private readonly beneficiariesService: BeneficiariesService,
     private readonly interventionsService: InterventionsService,
     private readonly enrollmentsService: EnrollmentsService,
@@ -121,19 +120,7 @@ export class DataReviewService {
         formSchema as unknown as Record<string, unknown>,
       );
 
-      const results: UploadResult = {
-        total: rows.length,
-        valid: 0,
-        invalid: 0,
-        duplicates: 0,
-        pendingIds: [],
-      };
-
-      // Track NIDs seen in this CSV to detect intra-CSV duplicates
-      const ninsInCurrentUpload = new Map<string, string>(); // NIN -> first pending record ID
-      let csvDuplicateCount = 0;
-
-      for (const row of rows) {
+      const prepared = rows.map((row, idx) => {
         const coreData: Record<string, unknown> = {};
         const customData: Record<string, unknown> = {};
 
@@ -146,31 +133,52 @@ export class DataReviewService {
           }
         }
 
-        const errors = this.validateBeneficiaryData(coreData);
+        return { rowIndex: idx + 1, coreData, customData };
+      });
 
-        // validate the lga if provided
-        if (coreData.lga) {
-          // Make the LGA lookup case-insensitive by using ILike (for Postgres) if using TypeORM.
-          const lga = await this.lgaRepository.findOne({
-            where: { name: ILike(coreData.lga as string) },
-          });
+      const lgaNameToId = await this.lgasService.findIdsByNormalizedNames(
+        prepared.map((p) =>
+          typeof p.coreData.lga === 'string' ? p.coreData.lga : '',
+        ),
+      );
 
-          if (!lga) {
-            errors.push({
-              field: 'lga',
-              message: `Invalid LGA: ${coreData.lga as string} for beneficiary ${coreData.first_name as string} ${coreData.last_name as string}`,
-            });
+      const rejectionMessages: string[] = [];
+      for (const p of prepared) {
+        const rowErrors = this.validateBeneficiaryData(p.coreData);
+        for (const e of rowErrors) {
+          rejectionMessages.push(`Row ${p.rowIndex}: ${e.message}`);
+        }
+        const lgaRaw = p.coreData.lga;
+        if (typeof lgaRaw === 'string' && lgaRaw.trim()) {
+          const key = lgaRaw.trim().toLowerCase();
+          if (!lgaNameToId.has(key)) {
+            rejectionMessages.push(
+              `Row ${p.rowIndex}: unrecognized LGA "${lgaRaw.trim()}"`,
+            );
           }
         }
+      }
 
-        if (errors.length > 0) {
-          /* throw new BadRequestException(
-            `File must contain valid beneficiary data : ${errors.map((error) => error.field).join(', ')} is missing`,
-          ); */
-          throw new BadRequestException(
-            `File must contain valid beneficiary data : ${errors[0]?.message || 'Unknown error'}`,
-          );
-        }
+      if (rejectionMessages.length > 0) {
+        throw new BadRequestException(
+          `Upload rejected — fix the following and re-upload:\n${rejectionMessages.join('\n')}`,
+        );
+      }
+
+      const results: UploadResult = {
+        total: rows.length,
+        valid: 0,
+        invalid: 0,
+        duplicates: 0,
+        pendingIds: [],
+      };
+
+      // Track NIDs seen in this CSV to detect intra-CSV duplicates
+      const ninsInCurrentUpload = new Map<string, string>(); // NIN -> first pending record ID
+      let csvDuplicateCount = 0;
+
+      for (const { coreData, customData } of prepared) {
+        const errors: Array<{ field: string; message: string }> = [];
 
         let duplicateStatus = PendingBeneficiaryStatus.PENDING_REVIEW;
         let duplicateOfId: string | undefined = undefined;

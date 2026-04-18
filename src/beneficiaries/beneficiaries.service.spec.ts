@@ -2,7 +2,11 @@ import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BeneficiariesService } from './beneficiaries.service';
-import { BeneficiaryEntity } from './entities/beneficiary.entity';
+import {
+  BeneficiaryEntity,
+  BeneficiaryType,
+} from './entities/beneficiary.entity';
+import { LgasService } from '../lgas/lgas.service';
 import {
   BeneficiaryListSortBy,
   QueryBeneficiariesDto,
@@ -10,6 +14,15 @@ import {
 
 describe('BeneficiariesService', () => {
   let service: BeneficiariesService;
+  let beneficiaryRepository: {
+    find: jest.Mock;
+    findOne: jest.Mock;
+    save: jest.Mock;
+    create: jest.Mock;
+    createQueryBuilder: jest.Mock;
+    update: jest.Mock;
+  };
+  let lgasService: { findIdsByNormalizedNames: jest.Mock };
 
   const mockQb = {
     innerJoinAndSelect: jest.fn().mockReturnThis(),
@@ -25,7 +38,7 @@ describe('BeneficiariesService', () => {
   };
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
         BeneficiariesService,
         {
@@ -39,10 +52,22 @@ describe('BeneficiariesService', () => {
             create: jest.fn(),
           },
         },
+        {
+          provide: LgasService,
+          useValue: {
+            findIdsByNormalizedNames: jest
+              .fn()
+              .mockResolvedValue(new Map<string, number>()),
+          },
+        },
       ],
     }).compile();
 
-    service = module.get(BeneficiariesService);
+    service = moduleRef.get(BeneficiariesService);
+    beneficiaryRepository = moduleRef.get(
+      getRepositoryToken(BeneficiaryEntity),
+    );
+    lgasService = moduleRef.get(LgasService);
     jest.clearAllMocks();
   });
 
@@ -55,5 +80,29 @@ describe('BeneficiariesService', () => {
     await expect(
       service.findAllByIntervention(interventionId, query),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects create when LGA name does not match master list', async () => {
+    beneficiaryRepository.find.mockResolvedValue([]);
+    lgasService.findIdsByNormalizedNames.mockResolvedValue(new Map());
+
+    await expect(
+      service.create([
+        {
+          nidhh: '12345678901',
+          legacy_id: 'legacy',
+          account_number: '1234567890',
+          bank: 'Test Bank',
+          community: 'Comm',
+          beneficiary_type: BeneficiaryType.INDIVIDUAL,
+          first_name: 'A',
+          last_name: 'B',
+          nin: '12345678901',
+          lga: 'Not A Real LGA',
+        },
+      ]),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(beneficiaryRepository.save).not.toHaveBeenCalled();
   });
 });

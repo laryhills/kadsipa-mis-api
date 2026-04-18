@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { UserEntity } from '../../users/entities/user.entity';
 import { EnrollmentEntity } from '../../enrollments/entities/enrollment.entity';
+import { LgaEntity } from '../../lgas/entities/lga.entity';
 
 export enum BeneficiaryType {
   INDIVIDUAL = 'individual',
@@ -85,6 +86,13 @@ export class BeneficiaryEntity {
 
   @Column({ length: 100, nullable: true })
   lga: string;
+
+  @Column({ name: 'lga_id', type: 'int', nullable: true })
+  lga_id: number | null;
+
+  @ManyToOne(() => LgaEntity, { nullable: true })
+  @JoinColumn({ name: 'lga_id' })
+  lgaEntity: LgaEntity;
 
   @Column({ length: 100, nullable: true })
   ward: string;

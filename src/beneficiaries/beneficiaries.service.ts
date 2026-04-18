@@ -5,7 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository, SelectQueryBuilder } from 'typeorm';
+import {
+  IsNull,
+  Repository,
+  SelectQueryBuilder,
+  type QueryDeepPartialEntity,
+} from 'typeorm';
 import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import {
@@ -19,12 +24,20 @@ import {
   QueryBeneficiariesDto,
 } from './dto/query-beneficiaries.dto';
 import { DisbursementStatus } from '../disbursements/entities/disbursement.entity';
+import { LgasService } from '../lgas/lgas.service';
+
+/** Intervention-scoped list: `state` is state name only; `lgaEntity` is omitted from JSON. */
+export type BeneficiaryInterventionListItem = Omit<
+  BeneficiaryEntity,
+  'lgaEntity'
+> & { state: string | null };
 
 @Injectable()
 export class BeneficiariesService {
   constructor(
     @InjectRepository(BeneficiaryEntity)
     private readonly beneficiaryRepository: Repository<BeneficiaryEntity>,
+    private readonly lgasService: LgasService,
   ) {}
 
   async create(
@@ -49,12 +62,20 @@ export class BeneficiariesService {
       );
     }
 
-    const beneficiaries = createBeneficiaryDtos.map((dto) =>
-      this.beneficiaryRepository.create({
-        ...dto,
-        created_by: userId,
-      }),
+    const lgaNameToId = await this.lgasService.findIdsByNormalizedNames(
+      createBeneficiaryDtos.map((d) => d.lga ?? ''),
     );
+    this.assertNoUnresolvedLgas(createBeneficiaryDtos, lgaNameToId);
+
+    const beneficiaries = createBeneficiaryDtos.map((dto) => {
+      const lgaKey = dto.lga?.trim().toLowerCase() ?? '';
+      const lga_id = lgaKey ? (lgaNameToId.get(lgaKey) ?? null) : null;
+      return this.beneficiaryRepository.create({
+        ...dto,
+        lga_id,
+        created_by: userId,
+      });
+    });
 
     return await this.beneficiaryRepository.save(beneficiaries);
   }
@@ -94,7 +115,7 @@ export class BeneficiariesService {
   async findAllByIntervention(
     interventionId: string,
     query: QueryBeneficiariesDto,
-  ): Promise<PaginatedResponse<BeneficiaryEntity>> {
+  ): Promise<PaginatedResponse<BeneficiaryInterventionListItem>> {
     if (!UUID_REGEX.test(interventionId)) {
       throw new BadRequestException('Invalid intervention ID');
     }
@@ -117,7 +138,9 @@ export class BeneficiariesService {
         'enrollment',
         'enrollment.intervention_id = :interventionId',
         { interventionId },
-      );
+      )
+      .leftJoinAndSelect('beneficiary.lgaEntity', 'lga')
+      .leftJoinAndSelect('lga.state', 'state');
 
     if (!includeDeleted) {
       qb.andWhere('beneficiary.deleted_at IS NULL');
@@ -129,7 +152,15 @@ export class BeneficiariesService {
 
     qb.skip((page - 1) * limit).take(limit);
 
-    const [data, total] = await qb.getManyAndCount();
+    const [rows, total] = await qb.getManyAndCount();
+
+    const data: BeneficiaryInterventionListItem[] = rows.map((b) => {
+      const { lgaEntity, ...rest } = b;
+      return {
+        ...rest,
+        state: lgaEntity?.state?.name ?? null,
+      };
+    });
 
     return {
       data,
@@ -237,6 +268,20 @@ export class BeneficiariesService {
       throw new ConflictException('Beneficiary with this NIN already exists');
     }
 
+    const lgaRaw =
+      'lga' in createBeneficiaryDto ? createBeneficiaryDto.lga : undefined;
+    const lgaStr = typeof lgaRaw === 'string' ? lgaRaw : undefined;
+    const lgaNameToId = await this.lgasService.findIdsByNormalizedNames([
+      lgaStr ?? '',
+    ]);
+    const lgaKey = lgaStr?.trim().toLowerCase() ?? '';
+    if (lgaKey && !lgaNameToId.has(lgaKey)) {
+      throw new BadRequestException(
+        `Unrecognized LGA name: "${(lgaStr ?? '').trim()}". Must match an LGA in the master list.`,
+      );
+    }
+    const lga_id = lgaKey ? (lgaNameToId.get(lgaKey) ?? null) : null;
+
     // Provide defaults for required fields not typically in CSV uploads
     const beneficiaryData: Partial<BeneficiaryEntity> = {
       ...createBeneficiaryDto,
@@ -250,6 +295,7 @@ export class BeneficiariesService {
         'community' in createBeneficiaryDto && createBeneficiaryDto.community
           ? createBeneficiaryDto.community
           : 'Not Specified',
+      lga_id,
       created_by: userId,
     };
 
@@ -283,9 +329,61 @@ export class BeneficiariesService {
       }
     }
 
-    await this.beneficiaryRepository.update(id, updateBeneficiaryDto);
+    const patch: QueryDeepPartialEntity<BeneficiaryEntity> = {
+      ...updateBeneficiaryDto,
+    };
+
+    if (Object.prototype.hasOwnProperty.call(updateBeneficiaryDto, 'lga')) {
+      const lgaNameToId = await this.lgasService.findIdsByNormalizedNames([
+        updateBeneficiaryDto.lga ?? '',
+      ]);
+      const lgaKey = updateBeneficiaryDto.lga?.trim().toLowerCase() ?? '';
+      if (lgaKey && !lgaNameToId.has(lgaKey)) {
+        throw new BadRequestException(
+          `Unrecognized LGA name: "${(updateBeneficiaryDto.lga ?? '').trim()}". Must match an LGA in the master list.`,
+        );
+      }
+      patch.lga_id = lgaKey ? (lgaNameToId.get(lgaKey) ?? null) : null;
+    }
+
+    await this.beneficiaryRepository.update(id, patch);
 
     return await this.findOne(id);
+  }
+
+  private assertNoUnresolvedLgas(
+    items: { lga?: string }[],
+    lgaNameToId: Map<string, number>,
+  ): void {
+    const bad = BeneficiariesService.unmatchedLgaDisplayNames(
+      items,
+      lgaNameToId,
+    );
+    if (bad.length > 0) {
+      throw new BadRequestException(
+        `Unrecognized LGA name(s): ${bad.map((n) => `"${n}"`).join(', ')}. Each must match an LGA in the master list.`,
+      );
+    }
+  }
+
+  private static unmatchedLgaDisplayNames(
+    items: { lga?: string }[],
+    lgaNameToId: Map<string, number>,
+  ): string[] {
+    const seenKeys = new Set<string>();
+    const labels: string[] = [];
+    for (const item of items) {
+      const raw = item.lga?.trim();
+      if (!raw) {
+        continue;
+      }
+      const key = raw.toLowerCase();
+      if (!lgaNameToId.has(key) && !seenKeys.has(key)) {
+        seenKeys.add(key);
+        labels.push(raw);
+      }
+    }
+    return labels;
   }
 
   async remove(id: string): Promise<void> {
