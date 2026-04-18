@@ -12,8 +12,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { LgaEntity } from '../lgas/entities/lga.entity';
 import { UUID_REGEX } from '../common/constants';
 import { PaginatedResponse } from '../common/interfaces/paginated-response.interface';
-import { QueryInterventionsDto } from './dto/query-interventions.dto';
+import {
+  InterventionListSortBy,
+  QueryInterventionsDto,
+} from './dto/query-interventions.dto';
 import { FindOptionsOrder } from 'typeorm';
+import { EnrollmentEntity } from '../enrollments/entities/enrollment.entity';
 
 @Injectable()
 export class InterventionsService {
@@ -81,22 +85,56 @@ export class InterventionsService {
     const limit = query.limit ?? 10;
     const sortOrder = query.sortOrder ?? 'DESC';
 
-    const order: FindOptionsOrder<InterventionEntity> = query.sortBy
-      ? ({
-          [query.sortBy]: sortOrder,
-        } as FindOptionsOrder<InterventionEntity>)
-      : { created_at: 'DESC' };
+    let results: InterventionEntity[];
+    let total: number;
 
-    const [results, total] = await this.interventionRepository.findAndCount({
-      relations: ['lgas'],
-      take: limit,
-      skip: (page - 1) * limit,
-      order,
-    });
+    if (query.sortBy === InterventionListSortBy.enrollmentCount) {
+      const qb = this.interventionRepository
+        .createQueryBuilder('intervention')
+        .leftJoinAndSelect('intervention.lgas', 'lga')
+        .where('intervention.deleted_at IS NULL')
+        .orderBy(
+          '(SELECT COUNT(*) FROM intervention_enrollments e WHERE e.intervention_id = intervention.id)',
+          sortOrder,
+        )
+        .skip((page - 1) * limit)
+        .take(limit);
+      [results, total] = await qb.getManyAndCount();
+    } else {
+      const order: FindOptionsOrder<InterventionEntity> = query.sortBy
+        ? ({
+            [query.sortBy]: sortOrder,
+          } as FindOptionsOrder<InterventionEntity>)
+        : { created_at: 'DESC' };
+
+      [results, total] = await this.interventionRepository.findAndCount({
+        relations: ['lgas'],
+        take: limit,
+        skip: (page - 1) * limit,
+        order,
+      });
+    }
+
+    const ids = results.map((i) => i.id);
+    const enrollmentCountById = new Map<string, number>();
+    if (ids.length > 0) {
+      const countRows = await this.interventionRepository.manager
+        .createQueryBuilder(EnrollmentEntity, 'e')
+        .select('e.intervention_id', 'interventionId')
+        .addSelect('COUNT(e.id)::int', 'cnt')
+        .where('e.intervention_id IN (:...ids)', { ids })
+        .groupBy('e.intervention_id')
+        .getRawMany<{ interventionId: string; cnt: string }>();
+
+      for (const row of countRows) {
+        enrollmentCountById.set(row.interventionId, Number(row.cnt));
+      }
+    }
 
     const data = results.map((intervention) => ({
       ...intervention,
       lgas: intervention.lgas.map((lga) => lga.name),
+      enrollmentCount: enrollmentCountById.get(intervention.id) ?? 0,
     }));
 
     /*     const queryBuilder = this.interventionRepository

@@ -25,7 +25,10 @@ import {
   EnrollmentEntity,
   EnrollmentStatus,
 } from '../enrollments/entities/enrollment.entity';
-import { InterventionEntity } from '../interventions/entities/intervention.entity';
+import {
+  InterventionEntity,
+  InterventionStatus,
+} from '../interventions/entities/intervention.entity';
 import { DashboardCacheService } from '../dashboard/dashboard-cache.service';
 
 const BLOCKING_DISBURSEMENT_STATUSES: DisbursementStatus[] = [
@@ -52,6 +55,19 @@ export class DisbursementsService {
       );
     }
     return amount;
+  }
+
+  private assertInterventionAllowsDisbursement(
+    status: InterventionStatus,
+  ): void {
+    if (
+      status !== InterventionStatus.DRAFT &&
+      status !== InterventionStatus.ACTIVE
+    ) {
+      throw new BadRequestException(
+        'Disbursements are only allowed when the intervention status is draft or active.',
+      );
+    }
   }
 
   private async assertBeneficiaryNotAlreadyDisbursed(
@@ -126,6 +142,7 @@ export class DisbursementsService {
     const intervention = await this.interventionsService.findOne(
       createDisbursementDto.interventionId,
     );
+    this.assertInterventionAllowsDisbursement(intervention.status);
     const beneficiary = await this.beneficiariesService.findOne(
       createDisbursementDto.beneficiaryId,
     );
@@ -191,7 +208,10 @@ export class DisbursementsService {
         await manager.update(
           InterventionEntity,
           { id: intervention.id },
-          { budgetSpent: Number(intervention.budgetSpent) + Number(amount) },
+          {
+            budgetSpent: Number(intervention.budgetSpent) + Number(amount),
+            status: InterventionStatus.ACTIVE,
+          },
         );
 
         await manager.update(
@@ -233,6 +253,7 @@ export class DisbursementsService {
     const intervention = await this.interventionsService.findOne(
       createBatchDto.interventionId,
     );
+    this.assertInterventionAllowsDisbursement(intervention.status);
 
     const batchBeneficiaryIds = createBatchDto.disbursements.map(
       (d) => d.beneficiaryId,
@@ -348,7 +369,10 @@ export class DisbursementsService {
       await manager.update(
         InterventionEntity,
         { id: intervention.id },
-        { budgetSpent: Number(intervention.budgetSpent) + Number(totalAmount) },
+        {
+          budgetSpent: Number(intervention.budgetSpent) + Number(totalAmount),
+          status: InterventionStatus.ACTIVE,
+        },
       );
 
       await manager.update(
@@ -404,6 +428,7 @@ export class DisbursementsService {
   ): Promise<DisbursementEntity[]> {
     const intervention =
       await this.interventionsService.findOne(interventionId);
+    this.assertInterventionAllowsDisbursement(intervention.status);
 
     const allEnrollments =
       await this.enrollmentsService.findByIntervention(interventionId);
@@ -501,6 +526,7 @@ export class DisbursementsService {
           { id: intervention.id },
           {
             budgetSpent: Number(intervention.budgetSpent) + Number(totalAmount),
+            status: InterventionStatus.ACTIVE,
           },
         );
 
@@ -619,6 +645,12 @@ export class DisbursementsService {
   ): Promise<DisbursementEntity> {
     const disbursement = await this.findOne(id);
 
+    if (updateStatusDto.status === DisbursementStatus.PAID) {
+      this.assertInterventionAllowsDisbursement(
+        disbursement.intervention.status,
+      );
+    }
+
     disbursement.status = updateStatusDto.status;
     if (updateStatusDto.notes) {
       disbursement.notes = updateStatusDto.notes;
@@ -632,6 +664,15 @@ export class DisbursementsService {
     }
 
     const saved = await this.disbursementRepository.save(disbursement);
+
+    if (updateStatusDto.status === DisbursementStatus.PAID) {
+      await this.disbursementRepository.manager.update(
+        InterventionEntity,
+        { id: disbursement.interventionId },
+        { status: InterventionStatus.ACTIVE },
+      );
+    }
+
     this.dashboardCache.invalidate();
     return saved;
   }

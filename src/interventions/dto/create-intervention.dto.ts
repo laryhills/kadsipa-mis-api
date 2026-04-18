@@ -1,7 +1,7 @@
 import {
   ArrayMinSize,
   IsArray,
-  IsDateString,
+  IsDate,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -10,7 +10,7 @@ import {
   IsPositive,
   IsString,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   FundingSource,
   InterventionType,
@@ -47,11 +47,13 @@ export class CreateInterventionDto {
   @IsOptional()
   report_frequency?: ReportFrequency;
 
-  @IsDateString()
+  @Type(() => Date)
+  @IsDate({ message: 'start_date must be a valid ISO 8601 date string' })
   @IsNotEmpty({ message: 'Start date is required' })
   start_date: Date;
 
-  @IsDateString()
+  @Type(() => Date)
+  @IsDate({ message: 'end_date must be a valid ISO 8601 date string' })
   @IsNotEmpty({ message: 'End date is required' })
   end_date: Date;
 

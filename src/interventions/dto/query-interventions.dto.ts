@@ -8,6 +8,7 @@ export enum InterventionListSortBy {
   budgetAllocated = 'budgetAllocated',
   budgetSpent = 'budgetSpent',
   status = 'status',
+  enrollmentCount = 'enrollmentCount',
 }
 
 export class QueryInterventionsDto extends SortOrderQueryDto {

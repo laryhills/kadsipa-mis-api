@@ -22,6 +22,7 @@ export enum InterventionStatus {
 export enum FundingSource {
   FEDERAL = 'Federal',
   STATE_GOVERNMENT = 'State Government',
+  LOCAL_GOVERNMENT = 'Local Government',
   NGO = 'NGO',
   INTERNATIONAL_DONOR = 'International Donor',
   PRIVATE_SECTOR = 'Private Sector',
