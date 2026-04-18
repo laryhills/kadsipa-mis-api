@@ -27,11 +27,12 @@ export class UploadNotificationsController {
   async findAll(
     @CurrentUser() currentUser: JwtPayload,
     @Query('interventionId') interventionId?: string,
+    @Query('status') status?: string,
   ) {
     const id = interventionId?.trim();
     const notifications = id
       ? await this.uploadNotificationsService.findByIntervention(id)
-      : await this.uploadNotificationsService.findAll(currentUser.id);
+      : await this.uploadNotificationsService.findAll(currentUser.id, status);
     return successResponse('Notifications fetched successfully', notifications);
   }
 

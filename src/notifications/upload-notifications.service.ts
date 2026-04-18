@@ -31,7 +31,10 @@ export class UploadNotificationsService {
     return await this.notificationRepository.save(notification);
   }
 
-  async findAll(userId?: string): Promise<UploadNotificationEntity[]> {
+  async findAll(
+    userId?: string,
+    status?: string,
+  ): Promise<UploadNotificationEntity[]> {
     const query = this.notificationRepository
       .createQueryBuilder('notification')
       .leftJoinAndSelect('notification.intervention', 'intervention')
@@ -39,8 +42,20 @@ export class UploadNotificationsService {
       .addSelect(['createdBy.id', 'createdBy.email', 'createdBy.full_name'])
       .orderBy('notification.createdAt', 'DESC');
 
+    const conditions: string[] = [];
+    const params: Record<string, unknown> = {};
+
     if (userId) {
-      query.where('notification.createdById = :userId', { userId });
+      conditions.push('notification.createdById = :userId');
+      params.userId = userId;
+    }
+    if (status) {
+      conditions.push('notification.status = :status');
+      params.status = status;
+    }
+
+    if (conditions.length > 0) {
+      query.where(conditions.join(' AND '), params);
     }
 
     return await query.getMany();
