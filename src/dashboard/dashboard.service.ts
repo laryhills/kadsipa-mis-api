@@ -5,6 +5,7 @@ import type { Cache } from 'cache-manager';
 import { DataSource } from 'typeorm';
 import { DisbursementStatus } from '../disbursements/entities/disbursement.entity';
 import { PendingBeneficiaryStatus } from '../data-review/entities/pending-beneficiary.entity';
+import { InterventionStatus } from '../interventions/entities/intervention.entity';
 import {
   BeneficiaryGrowthPeriod,
   RecentDisbursementsQueryDto,
@@ -59,7 +60,7 @@ export class DashboardService {
   async getOverview() {
     const [stats, recentActivity] = await Promise.all([
       this.cached(
-        'dashboard:overview:v1',
+        'dashboard:overview:v2',
         () => this.buildOverviewStatistics(),
         OVERVIEW_CACHE_MS,
       ),
@@ -75,15 +76,27 @@ export class DashboardService {
 
   private async buildOverviewStatistics() {
     const [
-      [interventionRow],
+      [interventionStatsRow],
       demoRow,
       interventionBudgetRow,
       orgBudgetRow,
       disbursedRow,
       pendingRow,
     ] = await Promise.all([
-      this.dataSource.query<{ count: string }[]>(
-        `SELECT COUNT(*)::text AS count FROM interventions WHERE deleted_at IS NULL`,
+      this.dataSource.query<
+        { total: string; active: string; pending: string }[]
+      >(
+        `SELECT
+            COUNT(*)::text AS total,
+            COUNT(*) FILTER (WHERE status = $1)::text AS active,
+            COUNT(*) FILTER (WHERE status IN ($2, $3))::text AS pending
+          FROM interventions
+          WHERE deleted_at IS NULL`,
+        [
+          InterventionStatus.ACTIVE,
+          InterventionStatus.DRAFT,
+          InterventionStatus.SUSPENDED,
+        ],
       ),
       this.dataSource.query<
         {
@@ -131,7 +144,9 @@ export class DashboardService {
 
     return {
       interventions: {
-        total: this.toNum(interventionRow?.count),
+        total: this.toNum(interventionStatsRow?.total),
+        active: this.toNum(interventionStatsRow?.active),
+        pending: this.toNum(interventionStatsRow?.pending),
       },
       beneficiaries: {
         totalEnrolled: this.toNum(demo?.total),
