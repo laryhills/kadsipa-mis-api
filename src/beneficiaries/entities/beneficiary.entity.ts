@@ -97,7 +97,7 @@ export class BeneficiaryEntity {
   @Column({ length: 100, nullable: true })
   ward: string;
 
-  @Column({ length: 255, nullable: false })
+  @Column({ length: 255, nullable: true })
   community: string;
 
   @Column({

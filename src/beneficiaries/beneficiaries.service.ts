@@ -26,11 +26,13 @@ import {
 import { DisbursementStatus } from '../disbursements/entities/disbursement.entity';
 import { LgasService } from '../lgas/lgas.service';
 
-/** Intervention-scoped list: `state` is state name only; `lgaEntity` is omitted from JSON. */
-export type BeneficiaryInterventionListItem = Omit<
-  BeneficiaryEntity,
-  'lgaEntity'
-> & { state: string | null };
+/** `state` is state name only; `lgaEntity` is omitted from JSON. */
+export type BeneficiaryWithState = Omit<BeneficiaryEntity, 'lgaEntity'> & {
+  state: string | null;
+};
+
+/** Intervention-scoped list item (same shape as detail with state). */
+export type BeneficiaryInterventionListItem = BeneficiaryWithState;
 
 @Injectable()
 export class BeneficiariesService {
@@ -236,21 +238,30 @@ export class BeneficiariesService {
     qb.orderBy('beneficiary.created_at', 'DESC');
   }
 
-  async findOne(id: string): Promise<BeneficiaryEntity> {
+  async findOne(id: string): Promise<BeneficiaryWithState> {
     if (!UUID_REGEX.test(id)) {
       throw new BadRequestException('Invalid beneficiary ID');
     }
 
     const beneficiary = await this.beneficiaryRepository.findOne({
       where: { id, deleted_at: IsNull() },
-      relations: ['enrollments', 'enrollments.intervention'],
+      relations: [
+        'enrollments',
+        'enrollments.intervention',
+        'lgaEntity',
+        'lgaEntity.state',
+      ],
     });
 
     if (!beneficiary) {
       throw new NotFoundException('Beneficiary not found');
     }
 
-    return beneficiary;
+    const { lgaEntity, ...rest } = beneficiary;
+    return {
+      ...rest,
+      state: lgaEntity?.state?.name ?? null,
+    };
   }
 
   async findByNIN(nin: string): Promise<BeneficiaryEntity | null> {
@@ -310,7 +321,7 @@ export class BeneficiariesService {
       community:
         'community' in createBeneficiaryDto && createBeneficiaryDto.community
           ? createBeneficiaryDto.community
-          : 'Not Specified',
+          : undefined,
       lga_id,
       created_by: userId,
     };
@@ -323,7 +334,7 @@ export class BeneficiariesService {
   async update(
     id: string,
     updateBeneficiaryDto: UpdateBeneficiaryDto,
-  ): Promise<BeneficiaryEntity> {
+  ): Promise<BeneficiaryWithState> {
     if (!UUID_REGEX.test(id)) {
       throw new BadRequestException('Invalid beneficiary ID');
     }
@@ -412,7 +423,7 @@ export class BeneficiariesService {
     });
   }
 
-  async restore(id: string): Promise<BeneficiaryEntity> {
+  async restore(id: string): Promise<BeneficiaryWithState> {
     if (!UUID_REGEX.test(id)) {
       throw new BadRequestException('Invalid beneficiary ID');
     }
