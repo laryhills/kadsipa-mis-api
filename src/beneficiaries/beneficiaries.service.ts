@@ -126,6 +126,10 @@ export class BeneficiariesService {
       );
     }
 
+    if (query.sortBy === BeneficiaryListSortBy.allocationAmount) {
+      // allocationAmount is allowed — sorted via the joined enrollment alias
+    }
+
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
     const sortOrder = query.sortOrder ?? 'DESC';
@@ -148,6 +152,7 @@ export class BeneficiariesService {
 
     this.applyBeneficiarySort(qb, query.sortBy, sortOrder, {
       allowTotalAmountReceived: false,
+      allowAllocationAmount: true,
     });
 
     qb.skip((page - 1) * limit).take(limit);
@@ -174,7 +179,10 @@ export class BeneficiariesService {
     qb: SelectQueryBuilder<BeneficiaryEntity>,
     sortBy: BeneficiaryListSortBy | undefined,
     sortOrder: 'ASC' | 'DESC',
-    opts: { allowTotalAmountReceived: boolean },
+    opts: {
+      allowTotalAmountReceived: boolean;
+      allowAllocationAmount?: boolean;
+    },
   ): void {
     if (
       sortBy === BeneficiaryListSortBy.totalAmountReceived &&
@@ -186,6 +194,14 @@ export class BeneficiariesService {
       );
       qb.setParameter('paidStatus', DisbursementStatus.PAID);
       qb.orderBy('total_paid_sum', sortOrder);
+      return;
+    }
+
+    if (
+      sortBy === BeneficiaryListSortBy.allocationAmount &&
+      opts.allowAllocationAmount
+    ) {
+      qb.orderBy('enrollment.allocation_amount', sortOrder);
       return;
     }
 

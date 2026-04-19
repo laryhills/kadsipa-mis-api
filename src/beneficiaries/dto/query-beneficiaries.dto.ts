@@ -7,6 +7,7 @@ export enum BeneficiaryListSortBy {
   nin = 'nin',
   accountNumber = 'accountNumber',
   totalAmountReceived = 'totalAmountReceived',
+  allocationAmount = 'allocationAmount',
   lga = 'lga',
   ward = 'ward',
 }
