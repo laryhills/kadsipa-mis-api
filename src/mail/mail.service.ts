@@ -39,6 +39,7 @@ export class MailService {
       this.logger.log(
         `Email sending disabled. Would have sent invitation to ${email}`,
       );
+      this.logger.log(`Temporary password: ${temporaryPassword}`);
       return;
     }
 

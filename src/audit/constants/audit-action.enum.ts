@@ -34,4 +34,5 @@ export enum ActivityType {
   FUND_REQUEST = 'fund_request',
   DEPARTMENT = 'department',
   FISCAL_YEAR = 'fiscal_year',
+  USER = 'user',
 }

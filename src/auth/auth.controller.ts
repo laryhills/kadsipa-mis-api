@@ -193,7 +193,11 @@ export class AuthController {
 
     const userEntity = await this.usersService.findOne(userId);
 
-    if (!userEntity || userEntity.status !== UserStatus.ACTIVE) {
+    if (
+      !userEntity ||
+      (userEntity.status !== UserStatus.ACTIVE &&
+        userEntity.status !== UserStatus.PENDING)
+    ) {
       throw new BadRequestException('Invalid user or inactive account');
     }
 

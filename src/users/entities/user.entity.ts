@@ -9,6 +9,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { hashPassword } from '../../common/utils/hash.util';
+import type { UserRoleEntity } from '../../roles/entities/user-role.entity';
 
 export enum UserStatus {
   ACTIVE = 'active',
@@ -50,7 +51,7 @@ export class UserEntity {
   deleted_at: Date;
 
   @OneToMany('UserRoleEntity', 'user')
-  userRoles: any[];
+  userRoles: UserRoleEntity[];
 
   @BeforeInsert()
   @BeforeUpdate()
