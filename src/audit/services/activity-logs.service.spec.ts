@@ -9,26 +9,35 @@ describe('ActivityLogsService', () => {
   const execMock = jest.fn();
   const leanMock = jest.fn(() => ({ exec: execMock }));
   const limitMock = jest.fn(() => ({ lean: leanMock }));
-  const sortMock = jest.fn(() => ({ limit: limitMock }));
+  const skipMock = jest.fn(() => ({ limit: limitMock }));
+  const sortMock = jest.fn(() => ({ skip: skipMock }));
   const findMock = jest.fn(() => ({ sort: sortMock }));
+  const countExecMock = jest.fn();
+  const countDocumentsMock = jest.fn();
 
   beforeEach(async () => {
     execMock.mockReset();
     leanMock.mockReset();
     limitMock.mockReset();
+    skipMock.mockReset();
     sortMock.mockReset();
     findMock.mockReset();
+    countExecMock.mockReset();
+    countDocumentsMock.mockReset();
+    countDocumentsMock.mockReturnValue({ exec: countExecMock });
     leanMock.mockReturnValue({ exec: execMock });
     limitMock.mockReturnValue({ lean: leanMock });
-    sortMock.mockReturnValue({ limit: limitMock });
+    skipMock.mockReturnValue({ limit: limitMock });
+    sortMock.mockReturnValue({ skip: skipMock, limit: limitMock });
     findMock.mockReturnValue({ sort: sortMock });
+    countExecMock.mockResolvedValue(0);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ActivityLogsService,
         {
           provide: getModelToken(ActivityLog.name),
-          useValue: { find: findMock },
+          useValue: { find: findMock, countDocuments: countDocumentsMock },
         },
       ],
     }).compile();
@@ -68,10 +77,25 @@ describe('ActivityLogsService', () => {
       ]);
     });
 
-    it('uses default limit 15 when omitted', async () => {
+    it('uses default limit 5 when omitted', async () => {
       execMock.mockResolvedValue([]);
       await service.findRecentForDashboard();
-      expect(limitMock).toHaveBeenCalledWith(15);
+      expect(limitMock).toHaveBeenCalledWith(5);
+    });
+  });
+
+  describe('findAll', () => {
+    it('applies case-insensitive description search and escapes regex metacharacters', async () => {
+      execMock.mockResolvedValue([]);
+      countExecMock.mockResolvedValue(0);
+
+      await service.findAll({ search: 'a+b', page: 1, limit: 10 } as any);
+
+      expect(findMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: { $regex: 'a\\+b', $options: 'i' },
+        }),
+      );
     });
   });
 });

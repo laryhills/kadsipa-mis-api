@@ -11,10 +11,14 @@ import { AuditLogsController } from './controllers/audit-logs.controller';
 import { ActivityLogsController } from './controllers/activity-logs.controller';
 import { AuditSubscriber } from './subscribers/audit.subscriber';
 import { AuditInterceptor } from './interceptors/audit.interceptor';
+import { AuthModule } from '../auth/auth.module';
+import { RolesModule } from '../roles/roles.module';
 
 @Global()
 @Module({
   imports: [
+    AuthModule,
+    RolesModule,
     MongooseModule.forFeature([
       { name: AuditLog.name, schema: AuditLogSchema },
       { name: ActivityLog.name, schema: ActivityLogSchema },

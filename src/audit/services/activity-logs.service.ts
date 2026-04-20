@@ -16,10 +16,15 @@ export interface CreateActivityLogData {
 interface ActivityLogFilter {
   userId?: string;
   activityType?: ActivityType;
+  description?: { $regex: string; $options: string };
   createdAt?: {
     $gte?: Date;
     $lte?: Date;
   };
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export interface DashboardRecentActivityItem {
@@ -55,6 +60,7 @@ export class ActivityLogsService {
     const {
       user_id,
       activity_type,
+      search,
       start_date,
       end_date,
       page = 1,
@@ -65,6 +71,10 @@ export class ActivityLogsService {
 
     if (user_id) filter.userId = user_id;
     if (activity_type) filter.activityType = activity_type;
+    const q = search?.trim();
+    if (q) {
+      filter.description = { $regex: escapeRegex(q), $options: 'i' };
+    }
 
     if (start_date && end_date) {
       filter.createdAt = {
