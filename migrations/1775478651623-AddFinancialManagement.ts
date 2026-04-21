@@ -26,9 +26,6 @@ export class AddFinancialManagement1775478651623 implements MigrationInterface {
       `ALTER TABLE "disbursements" ADD CONSTRAINT "FK_604509cc5e48101569453e298f5" FOREIGN KEY ("beneficiary_id") REFERENCES "beneficiaries"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
     await queryRunner.query(
-      `ALTER TABLE "disbursements" ADD CONSTRAINT "FK_c1151f0f3d3f5f85548eab7d126" FOREIGN KEY ("budget_line_id") REFERENCES "budget_lines"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
-    );
-    await queryRunner.query(
       `ALTER TABLE "disbursements" ADD CONSTRAINT "FK_81b9d0e19d3d19edca1b19b36b2" FOREIGN KEY ("approved_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
     await queryRunner.query(
@@ -42,9 +39,6 @@ export class AddFinancialManagement1775478651623 implements MigrationInterface {
     );
     await queryRunner.query(
       `ALTER TABLE "disbursements" DROP CONSTRAINT "FK_81b9d0e19d3d19edca1b19b36b2"`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "disbursements" DROP CONSTRAINT "FK_c1151f0f3d3f5f85548eab7d126"`,
     );
     await queryRunner.query(
       `ALTER TABLE "disbursements" DROP CONSTRAINT "FK_604509cc5e48101569453e298f5"`,
