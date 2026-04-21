@@ -6,13 +6,15 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike } from 'typeorm';
+import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { ReportEntity } from './entities/report.entity';
 import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
 import { QueryReportsDto } from './dto/query-reports.dto';
+import { ReportListSortBy } from './enums/report-list-sort-by.enum';
+import type { SortOrder } from '../common/dto/sort-query.dto';
 import { ReportDetailsResponseDto } from './dto/report-details-response.dto';
 import { ReportStatus } from './enums/report-status.enum';
 import type { ReportJobData } from './processors/reports.processor';
@@ -79,44 +81,69 @@ export class ReportsService {
       interventionId,
       reportType,
       status,
-      page = 1,
-      limit = 10,
-      sortBy = 'createdAt',
-      sortOrder = 'DESC',
+      periodStart,
+      periodEnd,
     } = query;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const sortBy: ReportListSortBy = query.sortBy ?? ReportListSortBy.createdAt;
+    const sortOrder: SortOrder = query.sortOrder ?? 'DESC';
 
-    const whereClause: Record<string, unknown> = {};
+    const qb = this.reportRepository
+      .createQueryBuilder('report')
+      .leftJoinAndSelect('report.intervention', 'intervention')
+      .innerJoin('report.generatedBy', 'generatedBy')
+      .addSelect([
+        'generatedBy.id',
+        'generatedBy.email',
+        'generatedBy.full_name',
+      ]);
 
     if (search) {
-      whereClause.name = ILike(`%${search}%`);
+      qb.andWhere('report.name ILIKE :search', { search: `%${search}%` });
     }
 
     if (interventionId) {
-      whereClause.interventionId = interventionId;
+      qb.andWhere('report.interventionId = :interventionId', {
+        interventionId,
+      });
     }
 
     if (reportType) {
-      whereClause.reportType = reportType;
+      qb.andWhere('report.reportType = :reportType', { reportType });
     }
 
     if (status) {
-      whereClause.status = status;
+      qb.andWhere('report.status = :status', { status });
     }
 
-    const [data, total] = await this.reportRepository.findAndCount({
-      where: whereClause,
-      relations: ['intervention', 'generatedBy'],
-      select: {
-        generatedBy: {
-          id: true,
-          email: true,
-          full_name: true,
-        },
-      },
-      skip: (page - 1) * limit,
-      take: limit,
-      order: { [sortBy]: sortOrder },
-    });
+    if (periodStart && periodEnd) {
+      qb.andWhere(
+        'report.startDate <= :periodEnd AND report.endDate >= :periodStart',
+        { periodStart, periodEnd },
+      );
+    }
+
+    switch (sortBy) {
+      case ReportListSortBy.name:
+        qb.orderBy('report.name', sortOrder);
+        break;
+      case ReportListSortBy.intervention:
+        qb.orderBy('intervention.name', sortOrder, 'NULLS LAST');
+        break;
+      case ReportListSortBy.createdAt:
+        qb.orderBy('report.createdAt', sortOrder);
+        break;
+      case ReportListSortBy.status:
+        qb.orderBy('report.status', sortOrder);
+        break;
+      default:
+        qb.orderBy('report.createdAt', 'DESC');
+    }
+
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
 
     return {
       data,
@@ -348,13 +375,23 @@ export class ReportsService {
 
   private async generateReferenceNumber(): Promise<string> {
     const year = new Date().getFullYear();
-    const count = await this.reportRepository.count({
-      where: {
-        referenceNumber: ILike(`RPT-${year}-%`),
-      },
-    });
+    const prefix = `RPT-${year}-`;
 
-    const nextNumber = (count + 1).toString().padStart(3, '0');
-    return `RPT-${year}-${nextNumber}`;
+    const last = await this.reportRepository
+      .createQueryBuilder('report')
+      .where('report.referenceNumber ILIKE :pattern', { pattern: `${prefix}%` })
+      .orderBy('report.referenceNumber', 'DESC')
+      .getOne();
+
+    let nextSeq = 1;
+    if (last?.referenceNumber?.startsWith(prefix)) {
+      const suffix = last.referenceNumber.slice(prefix.length);
+      const parsed = parseInt(suffix, 10);
+      if (!Number.isNaN(parsed)) {
+        nextSeq = parsed + 1;
+      }
+    }
+
+    return `${prefix}${nextSeq.toString().padStart(3, '0')}`;
   }
 }

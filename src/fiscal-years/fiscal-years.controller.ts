@@ -17,6 +17,8 @@ import { PassportJwtGuard } from '../auth/guards/passport-jwt.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { createdResponse, successResponse } from '../common';
+import { Audit } from '../audit/decorators/audit.decorator';
+import { ActivityType } from '../audit/constants/audit-action.enum';
 
 @Controller({ version: '1', path: 'fiscal-years' })
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -25,6 +27,7 @@ export class FiscalYearsController {
 
   @Post()
   @RequirePermission('financialManagement.manageBudget')
+  @Audit(ActivityType.FISCAL_YEAR, 'Fiscal year created')
   async create(@Body() createDto: CreateFiscalYearDto) {
     const fiscalYear = await this.fiscalYearsService.create(createDto);
     return createdResponse('Fiscal year created successfully', fiscalYear);

@@ -21,6 +21,8 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { DisbursementStatus } from './entities/disbursement.entity';
 import { createdResponse, successResponse } from '../common';
+import { Audit } from '../audit/decorators/audit.decorator';
+import { ActivityType } from '../audit/constants/audit-action.enum';
 
 @Controller({ version: '1', path: 'disbursements' })
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -44,6 +46,7 @@ export class DisbursementsController {
   @Post()
   @RequirePermission('financialManagement.manageBudget')
   @HttpCode(HttpStatus.CREATED)
+  @Audit(ActivityType.DISBURSEMENT, 'Disbursement batch created')
   async createBatch(
     @Body() createBatchDto: CreateBatchDisbursementDto,
     @CurrentUser() currentUser: JwtPayload,
@@ -111,6 +114,7 @@ export class DisbursementsController {
 
   @Patch(':id/status')
   @RequirePermission('financialManagement.manageBudget')
+  @Audit(ActivityType.DISBURSEMENT, 'Disbursement status updated')
   async updateStatus(
     @Param('id') id: string,
     @Body() updateStatusDto: UpdateDisbursementStatusDto,

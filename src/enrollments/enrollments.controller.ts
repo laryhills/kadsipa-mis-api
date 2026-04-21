@@ -14,6 +14,8 @@ import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
 import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
 import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
 import { createdResponse, successResponse } from '@/common';
+import { Audit } from '@/audit/decorators/audit.decorator';
+import { ActivityType } from '@/audit/constants/audit-action.enum';
 
 @Controller({ version: '1', path: 'enrollments' })
 @UseGuards(PassportJwtGuard)
@@ -21,6 +23,7 @@ export class EnrollmentsController {
   constructor(private readonly enrollmentsService: EnrollmentsService) {}
 
   @Post()
+  @Audit(ActivityType.ENROLLMENT, 'Enrollment created')
   async create(@Body() createEnrollmentDto: CreateEnrollmentDto) {
     const enrollment =
       await this.enrollmentsService.create(createEnrollmentDto);
@@ -55,6 +58,7 @@ export class EnrollmentsController {
   }
 
   @Patch(':id')
+  @Audit(ActivityType.ENROLLMENT, 'Enrollment updated')
   async update(
     @Param('id') id: string,
     @Body() updateEnrollmentDto: UpdateEnrollmentDto,
@@ -67,6 +71,7 @@ export class EnrollmentsController {
   }
 
   @Delete(':id')
+  @Audit(ActivityType.ENROLLMENT, 'Enrollment deleted')
   async remove(@Param('id') id: string) {
     await this.enrollmentsService.remove(id);
     return successResponse('Enrollment deleted successfully', null);

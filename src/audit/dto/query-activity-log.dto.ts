@@ -1,4 +1,11 @@
-import { IsOptional, IsEnum, IsUUID, IsDateString } from 'class-validator';
+import {
+  IsOptional,
+  IsEnum,
+  IsUUID,
+  IsDateString,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 import { ActivityType } from '../constants/audit-action.enum';
 
 export class QueryActivityLogDto {
@@ -9,6 +16,11 @@ export class QueryActivityLogDto {
   @IsOptional()
   @IsEnum(ActivityType)
   activity_type?: ActivityType;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  search?: string;
 
   @IsOptional()
   @IsDateString()

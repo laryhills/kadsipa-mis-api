@@ -151,6 +151,38 @@ export class RefreshTokenService {
     this.logger.log(`Revoked all tokens for user ${userId}`);
   }
 
+  /**
+   * Revokes all refresh tokens for other devices (other token families).
+   * Current session (identified by the provided refresh token) stays valid.
+   */
+  async revokeOtherSessions(
+    userId: string,
+    currentRefreshToken: string,
+  ): Promise<void> {
+    const tokenHash = this.hashToken(currentRefreshToken);
+
+    const current = await this.refreshTokenRepository.findOne({
+      where: { userId, tokenHash, isRevoked: false },
+    });
+
+    if (!current) {
+      throw new BadRequestException('Invalid refresh token');
+    }
+
+    const result = await this.refreshTokenRepository
+      .createQueryBuilder()
+      .update(RefreshTokenEntity)
+      .set({ isRevoked: true, revokedAt: new Date() })
+      .where('userId = :userId', { userId })
+      .andWhere('isRevoked = :isRevoked', { isRevoked: false })
+      .andWhere('tokenFamily != :family', { family: current.tokenFamily })
+      .execute();
+
+    this.logger.log(
+      `Revoked ${result.affected ?? 0} other session row(s) for user ${userId}`,
+    );
+  }
+
   async cleanupExpiredTokens(): Promise<void> {
     const result = await this.refreshTokenRepository.delete({
       expiresAt: LessThan(new Date()),

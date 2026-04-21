@@ -8,12 +8,14 @@ import { RolesModule } from '../roles/roles.module';
 import { DataReviewModule } from '../data-review/data-review.module';
 import { BeneficiariesModule } from '../beneficiaries/beneficiaries.module';
 import { DisbursementsModule } from '../disbursements/disbursements.module';
+import { EnrollmentsModule } from '../enrollments/enrollments.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([InterventionEntity, LgaEntity]),
     RolesModule,
     BeneficiariesModule,
+    EnrollmentsModule,
     forwardRef(() => DataReviewModule),
     forwardRef(() => DisbursementsModule),
   ],

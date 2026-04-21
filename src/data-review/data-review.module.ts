@@ -7,12 +7,13 @@ import { BeneficiariesModule } from '../beneficiaries/beneficiaries.module';
 import { InterventionsModule } from '../interventions/interventions.module';
 import { EnrollmentsModule } from '../enrollments/enrollments.module';
 import { RolesModule } from '../roles/roles.module';
-import { LgaEntity } from '@/lgas/entities/lga.entity';
 import { DashboardModule } from '../dashboard/dashboard.module';
+import { LgasModule } from '../lgas/lgas.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PendingBeneficiaryEntity, LgaEntity]),
+    TypeOrmModule.forFeature([PendingBeneficiaryEntity]),
+    LgasModule,
     BeneficiariesModule,
     forwardRef(() => InterventionsModule),
     EnrollmentsModule,

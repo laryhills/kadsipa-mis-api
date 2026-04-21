@@ -194,4 +194,25 @@ export class EnrollmentsService {
 
     await this.enrollmentRepository.remove(enrollment);
   }
+
+  async removeByInterventionAndBeneficiary(
+    interventionId: string,
+    beneficiaryId: string,
+  ): Promise<void> {
+    if (!UUID_REGEX.test(interventionId) || !UUID_REGEX.test(beneficiaryId)) {
+      throw new BadRequestException('Invalid intervention or beneficiary ID');
+    }
+
+    const enrollment = await this.enrollmentRepository.findOne({
+      where: { intervention_id: interventionId, beneficiary_id: beneficiaryId },
+    });
+
+    if (!enrollment) {
+      throw new NotFoundException(
+        'Beneficiary is not enrolled in this intervention',
+      );
+    }
+
+    await this.enrollmentRepository.remove(enrollment);
+  }
 }

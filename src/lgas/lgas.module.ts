@@ -9,6 +9,6 @@ import { StateEntity } from './entities/state.entity';
   imports: [TypeOrmModule.forFeature([LgaEntity, StateEntity])],
   controllers: [LgasController],
   providers: [LgasService],
-  exports: [TypeOrmModule],
+  exports: [TypeOrmModule, LgasService],
 })
 export class LgasModule {}

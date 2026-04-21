@@ -12,6 +12,7 @@ export enum OtpType {
   LOGIN = 'login',
   PASSWORD_RESET = 'password_reset',
   EMAIL_VERIFICATION = 'email_verification',
+  MFA_LOGIN_EMAIL_BACKUP = 'mfa_login_email_backup',
 }
 
 @Entity('otps')

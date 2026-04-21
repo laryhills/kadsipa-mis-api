@@ -18,6 +18,8 @@ import { PassportJwtGuard } from '../auth/guards/passport-jwt.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { createdResponse, successResponse } from '../common';
+import { Audit } from '../audit/decorators/audit.decorator';
+import { ActivityType } from '../audit/constants/audit-action.enum';
 
 @Controller({ version: '1', path: 'roles' })
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -55,6 +57,7 @@ export class RolesController {
 
   @Patch(':id/permissions')
   @RequirePermission('userManagement.manageRoles')
+  @Audit(ActivityType.USER, 'Role permissions updated')
   async updatePermissions(
     @Param('id') id: string,
     @Body('permissions') permissions: RolePermissions,

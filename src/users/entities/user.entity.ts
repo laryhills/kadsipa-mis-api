@@ -9,6 +9,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { hashPassword } from '../../common/utils/hash.util';
+import type { UserRoleEntity } from '../../roles/entities/user-role.entity';
 
 export enum UserStatus {
   ACTIVE = 'active',
@@ -34,8 +35,14 @@ export class UserEntity {
   @Column({ nullable: false, default: UserStatus.ACTIVE })
   status: UserStatus;
 
-  @Column({ nullable: true })
-  mfa_secret: string;
+  @Column({ type: 'varchar', nullable: true })
+  mfa_secret: string | null;
+
+  @Column({ name: 'mfa_totp_enabled', default: false })
+  mfa_totp_enabled: boolean;
+
+  @Column({ name: 'mfa_email_backup_enabled', default: false })
+  mfa_email_backup_enabled: boolean;
 
   @CreateDateColumn()
   created_at: Date;
@@ -50,7 +57,7 @@ export class UserEntity {
   deleted_at: Date;
 
   @OneToMany('UserRoleEntity', 'user')
-  userRoles: any[];
+  userRoles: UserRoleEntity[];
 
   @BeforeInsert()
   @BeforeUpdate()

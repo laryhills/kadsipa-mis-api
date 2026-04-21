@@ -20,6 +20,8 @@ import { RequirePermission } from '../auth/decorators/require-permission.decorat
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { createdResponse, successResponse } from '../common';
+import { Audit } from '../audit/decorators/audit.decorator';
+import { ActivityType } from '../audit/constants/audit-action.enum';
 
 @Controller({ version: '1', path: 'finance/budget-lines' })
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -29,6 +31,7 @@ export class BudgetLinesController {
   @Post()
   @RequirePermission('financialManagement.manageBudget')
   @HttpCode(HttpStatus.CREATED)
+  @Audit(ActivityType.BUDGET, 'Budget line created')
   async create(
     @Body() createBudgetLineDto: CreateBudgetLineDto,
     @CurrentUser() currentUser: JwtPayload,
@@ -70,6 +73,7 @@ export class BudgetLinesController {
 
   @Patch(':id')
   @RequirePermission('financialManagement.manageBudget')
+  @Audit(ActivityType.BUDGET, 'Budget line updated')
   async update(
     @Param('id') id: string,
     @Body() updateBudgetLineDto: UpdateBudgetLineDto,
@@ -84,6 +88,7 @@ export class BudgetLinesController {
   @Delete(':id')
   @RequirePermission('financialManagement.manageBudget')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Audit(ActivityType.BUDGET, 'Budget line deleted')
   async remove(@Param('id') id: string) {
     await this.budgetLinesService.remove(id);
   }

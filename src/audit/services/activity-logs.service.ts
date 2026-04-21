@@ -16,11 +16,27 @@ export interface CreateActivityLogData {
 interface ActivityLogFilter {
   userId?: string;
   activityType?: ActivityType;
+  description?: { $regex: string; $options: string };
   createdAt?: {
     $gte?: Date;
     $lte?: Date;
   };
 }
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export interface DashboardRecentActivityItem {
+  id: string;
+  userId?: string;
+  activityType?: ActivityType;
+  description: string;
+  createdAt: string;
+}
+
+const DASHBOARD_OVERVIEW_ACTIVITY_LIMIT = 5;
+
 @Injectable()
 export class ActivityLogsService {
   constructor(
@@ -44,6 +60,7 @@ export class ActivityLogsService {
     const {
       user_id,
       activity_type,
+      search,
       start_date,
       end_date,
       page = 1,
@@ -54,6 +71,10 @@ export class ActivityLogsService {
 
     if (user_id) filter.userId = user_id;
     if (activity_type) filter.activityType = activity_type;
+    const q = search?.trim();
+    if (q) {
+      filter.description = { $regex: escapeRegex(q), $options: 'i' };
+    }
 
     if (start_date && end_date) {
       filter.createdAt = {
@@ -102,5 +123,33 @@ export class ActivityLogsService {
       .limit(100)
       .lean()
       .exec();
+  }
+
+  async findRecentForDashboard(
+    limit: number = DASHBOARD_OVERVIEW_ACTIVITY_LIMIT,
+  ): Promise<{
+    limit: number;
+    items: DashboardRecentActivityItem[];
+  }> {
+    const clamped = Math.min(50, Math.max(1, limit));
+    const rows = await this.activityLogModel
+      .find({
+        activityType: { $ne: ActivityType.AUTH },
+      })
+      .sort({ createdAt: -1 })
+      .limit(clamped)
+      .lean()
+      .exec();
+
+    return {
+      limit: clamped,
+      items: rows.map((r) => ({
+        id: String(r._id),
+        userId: r.userId,
+        activityType: r.activityType,
+        description: r.description ?? '',
+        createdAt: (r.createdAt ?? new Date()).toISOString(),
+      })),
+    };
   }
 }

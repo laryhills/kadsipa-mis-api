@@ -11,13 +11,35 @@ import { InviteUserDto } from './dto/invite-user.dto';
 import { UserEntity, UserStatus } from '../users/entities/user.entity';
 import { UserRoleEntity } from '../roles/entities/user-role.entity';
 import type { RolePermissions } from '../roles/entities/role.entity';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UUID_REGEX } from '../common/constants';
 import * as crypto from 'crypto';
 import { comparePassword } from '../common/utils/hash.util';
 import { RolesService } from '@/roles/roles.service';
 import { MailService } from '../mail/mail.service';
+import { QueryUsersDto, UserListSortBy } from './dto/query-users.dto';
+
+export type UserListItem = {
+  id: string;
+  email: string;
+  full_name: string;
+  status: UserStatus;
+  created_at: Date;
+  updated_at: Date;
+  last_login_at: Date | null;
+  roles: { id: string; name: string }[];
+};
+
+export type UserPublicDetail = {
+  id: string;
+  email: string;
+  full_name: string;
+  status: UserStatus;
+  created_at: Date;
+  updated_at: Date;
+  last_login_at: Date | null;
+};
 
 @Injectable()
 export class UsersService {
@@ -30,6 +52,15 @@ export class UsersService {
     private readonly mailService: MailService,
   ) {}
 
+  async findActiveAuthUserById(id: string): Promise<UserEntity | null> {
+    if (!UUID_REGEX.test(id)) {
+      return null;
+    }
+    return await this.userRepository.findOne({
+      where: { id, deleted_at: IsNull() },
+    });
+  }
+
   async create(
     createUserDto: CreateUserDto,
   ): Promise<
@@ -39,7 +70,7 @@ export class UsersService {
     >
   > {
     const existing = await this.userRepository.findOne({
-      where: { email: createUserDto.email },
+      where: { email: createUserDto.email, deleted_at: IsNull() },
     });
     if (existing) {
       throw new ConflictException('Email already registered');
@@ -67,7 +98,7 @@ export class UsersService {
     temporaryPassword: string;
   }> {
     const existing = await this.userRepository.findOne({
-      where: { email: inviteUserDto.email },
+      where: { email: inviteUserDto.email, deleted_at: IsNull() },
     });
     if (existing) {
       throw new ConflictException('Email already registered');
@@ -115,23 +146,140 @@ export class UsersService {
     };
   }
 
-  async findAll(): Promise<UserEntity[]> {
-    return await this.userRepository.find();
+  async findAll(query: QueryUsersDto = {}): Promise<UserListItem[]> {
+    const sortBy = query.sortBy ?? UserListSortBy.name;
+    const sortOrder = query.sortOrder ?? 'ASC';
+
+    const qb = this.userRepository
+      .createQueryBuilder('u')
+      .where('u.deleted_at IS NULL')
+      .leftJoinAndSelect('u.userRoles', 'ur')
+      .leftJoinAndSelect('ur.role', 'r');
+
+    switch (sortBy) {
+      case UserListSortBy.name:
+        qb.orderBy('u.full_name', sortOrder);
+        break;
+      case UserListSortBy.status:
+        qb.orderBy('u.status', sortOrder);
+        break;
+      case UserListSortBy.lastActive:
+        qb.orderBy('u.last_login_at', sortOrder, 'NULLS LAST');
+        break;
+      case UserListSortBy.role:
+        qb.addSelect(
+          `(SELECT r2.name FROM user_roles ur2 INNER JOIN roles r2 ON r2.id = ur2.role_id WHERE ur2.user_id = u.id ORDER BY ur2.assigned_at ASC LIMIT 1)`,
+          'first_role_name',
+        );
+        qb.orderBy('first_role_name', sortOrder, 'NULLS LAST');
+        break;
+      default:
+        qb.orderBy('u.full_name', 'ASC');
+    }
+
+    const users = await qb.getMany();
+
+    return users.map((u) => ({
+      id: u.id,
+      email: u.email,
+      full_name: u.full_name,
+      status: u.status,
+      created_at: u.created_at,
+      updated_at: u.updated_at,
+      last_login_at: u.last_login_at ?? null,
+      roles:
+        (u.userRoles as UserRoleEntity[] | undefined)?.map((ur) => ({
+          id: ur.role.id,
+          name: ur.role.name,
+        })) ?? [],
+    }));
   }
 
   async findOneByEmail(email: string): Promise<UserEntity | null> {
-    return await this.userRepository.findOne({ where: { email } });
+    return await this.userRepository.findOne({
+      where: { email, deleted_at: IsNull() },
+    });
   }
 
-  async findOne(id: string): Promise<UserEntity | null> {
+  async findOne(id: string): Promise<UserEntity> {
     if (!UUID_REGEX.test(id)) {
       throw new BadRequestException('Invalid user ID');
     }
-    const user = await this.userRepository.findOne({ where: { id } });
+    const user = await this.userRepository.findOne({
+      where: { id, deleted_at: IsNull() },
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
     return user;
+  }
+
+  async findOnePublicDetail(id: string): Promise<UserPublicDetail> {
+    if (!UUID_REGEX.test(id)) {
+      throw new BadRequestException('Invalid user ID');
+    }
+    const row = await this.userRepository
+      .createQueryBuilder('u')
+      .select([
+        'u.id',
+        'u.email',
+        'u.full_name',
+        'u.status',
+        'u.created_at',
+        'u.updated_at',
+        'u.last_login_at',
+      ])
+      .where('u.id = :id', { id })
+      .andWhere('u.deleted_at IS NULL')
+      .getOne();
+
+    if (!row) {
+      throw new NotFoundException('User not found');
+    }
+
+    return {
+      id: row.id,
+      email: row.email,
+      full_name: row.full_name,
+      status: row.status,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      last_login_at: row.last_login_at ?? null,
+    };
+  }
+
+  async resetPendingUserInvite(
+    userId: string,
+    requestedBy: string,
+    personalMessage?: string,
+  ): Promise<void> {
+    if (userId === requestedBy) {
+      throw new BadRequestException('You cannot reset your own invitation.');
+    }
+    if (!UUID_REGEX.test(userId)) {
+      throw new BadRequestException('Invalid user ID');
+    }
+    const user = await this.findOne(userId);
+    if (user.status !== UserStatus.PENDING) {
+      throw new BadRequestException(
+        'Only users who have not completed signup can have their invite reset.',
+      );
+    }
+
+    const temporaryPassword = crypto
+      .randomBytes(12)
+      .toString('base64')
+      .slice(0, 16);
+
+    user.password = temporaryPassword;
+    await this.userRepository.save(user);
+
+    await this.mailService.sendUserInvitation(
+      user.email,
+      user.full_name,
+      temporaryPassword,
+      personalMessage,
+    );
   }
 
   async update(
@@ -141,12 +289,11 @@ export class UsersService {
     if (!UUID_REGEX.test(id)) {
       throw new BadRequestException('Invalid user ID');
     }
-    const user = await this.userRepository.findOne({ where: { id } });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+    await this.findOne(id);
     await this.userRepository.update(id, updateUserDto);
-    const updatedUser = await this.userRepository.findOne({ where: { id } });
+    const updatedUser = await this.userRepository.findOne({
+      where: { id, deleted_at: IsNull() },
+    });
     if (!updatedUser) {
       throw new NotFoundException('User not found');
     }
@@ -166,10 +313,7 @@ export class UsersService {
     if (!UUID_REGEX.test(id)) {
       throw new BadRequestException('Invalid user ID');
     }
-    const user = await this.userRepository.findOne({ where: { id } });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+    await this.findOne(id);
     await this.userRepository.update(id, { deleted_at: new Date() });
   }
 
@@ -181,6 +325,8 @@ export class UsersService {
     if (userId === assignedBy) {
       throw new BadRequestException('Users cannot assign roles to themselves');
     }
+
+    await this.findOne(userId);
 
     const existing = await this.userRoleRepository.findOne({
       where: { userId, roleId },
@@ -200,6 +346,8 @@ export class UsersService {
   }
 
   async removeRole(userId: string, roleId: string): Promise<void> {
+    await this.findOne(userId);
+
     const userRole = await this.userRoleRepository.findOne({
       where: { userId, roleId },
     });
@@ -223,6 +371,7 @@ export class UsersService {
     email: string;
     full_name: string;
     status: UserStatus;
+    requirePasswordChange: boolean;
     roles: Array<{
       id: string;
       name: string;
@@ -230,10 +379,7 @@ export class UsersService {
     }>;
     allPermissions: RolePermissions;
   }> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+    const user = await this.findOne(userId);
 
     const userRoles = await this.getUserRoles(userId);
 
@@ -252,6 +398,7 @@ export class UsersService {
       email: user.email,
       full_name: user.full_name,
       status: user.status,
+      requirePasswordChange: user.status === UserStatus.PENDING,
       roles,
       allPermissions,
     };
@@ -288,10 +435,7 @@ export class UsersService {
     currentPassword: string,
     newPassword: string,
   ): Promise<void> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+    const user = await this.findOne(userId);
 
     const isCurrentPasswordValid = await comparePassword(
       currentPassword,

@@ -12,6 +12,10 @@ export class RateLimiterService {
   private readonly maxAttempts = 3;
   private readonly windowMs = 15 * 60 * 1000; // 15 minutes
 
+  /** Stricter than generic login OTP — MFA backup email at login. */
+  private readonly mfaEmailBackupMaxAttempts = 2;
+  private readonly mfaEmailBackupWindowMs = 15 * 60 * 1000;
+
   // eslint-disable-next-line @typescript-eslint/require-await
   async checkOtpRateLimit(email: string): Promise<{
     allowed: boolean;
@@ -53,6 +57,43 @@ export class RateLimiterService {
     const key = `otp:${email}`;
     this.storage.delete(key);
     this.logger.log(`Reset rate limit for ${email}`);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async checkMfaEmailBackupRateLimit(email: string): Promise<{
+    allowed: boolean;
+    remaining: number;
+    resetAt: Date;
+  }> {
+    const key = `mfa_email_backup:${email}`;
+    const now = new Date();
+
+    let entry = this.storage.get(key);
+
+    if (!entry || now > entry.resetAt) {
+      entry = {
+        count: 0,
+        resetAt: new Date(now.getTime() + this.mfaEmailBackupWindowMs),
+      };
+      this.storage.set(key, entry);
+    }
+
+    entry.count++;
+
+    const allowed = entry.count <= this.mfaEmailBackupMaxAttempts;
+    const remaining = Math.max(0, this.mfaEmailBackupMaxAttempts - entry.count);
+
+    if (!allowed) {
+      this.logger.warn(
+        `MFA email backup rate limit exceeded for ${email}. Attempts: ${entry.count}/${this.mfaEmailBackupMaxAttempts}`,
+      );
+    }
+
+    return {
+      allowed,
+      remaining,
+      resetAt: entry.resetAt,
+    };
   }
 
   cleanupExpiredEntries(): void {

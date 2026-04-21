@@ -12,6 +12,8 @@ import * as ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
 import * as fs from 'fs';
 import * as path from 'path';
+
+type PdfDoc = InstanceType<typeof PDFDocument>;
 import { ReportEntity } from '../entities/report.entity';
 import { ReportType } from '../enums/report-type.enum';
 import { InterventionEntity } from '../../interventions/entities/intervention.entity';
@@ -133,89 +135,623 @@ export class ReportGeneratorService {
     }
   }
 
+  /**
+   * PDF built-ins (e.g. Helvetica) do not include ₦ (U+20A6); `style: 'currency'` renders a bad glyph.
+   * Use ISO 4217 code + number instead of a custom "N̶" (strikethrough N) which is also unreliable.
+   */
+  private pdfFmtNgnCompact(n: number): string {
+    const num = new Intl.NumberFormat('en-NG', {
+      notation: 'compact',
+      maximumFractionDigits: 1,
+    }).format(n);
+    return `NGN ${num}`;
+  }
+
+  private pdfFmtNgn(n: number): string {
+    const num = new Intl.NumberFormat('en-NG', {
+      maximumFractionDigits: 0,
+    }).format(n);
+    return `NGN ${num}`;
+  }
+
+  private reportMoneyCell(n: number): string {
+    return `NGN ${n.toLocaleString('en-NG')}`;
+  }
+
+  private pdfDrawHProgressBar(
+    doc: PdfDoc,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    percent: number,
+    fillHex: string,
+    trackHex: string,
+  ): void {
+    const p = Math.min(100, Math.max(0, percent));
+    doc.save();
+    doc.rect(x, y, width, height).fill(trackHex);
+    const fillW = (width * p) / 100;
+    if (fillW > 0.5) {
+      doc.rect(x, y, fillW, height).fill(fillHex);
+    }
+    doc.restore();
+  }
+
+  private pdfRoundedChip(
+    doc: PdfDoc,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    bg: string,
+    border: string,
+    label: string,
+    textColor: string,
+    fontSize = 8,
+  ): void {
+    const r = 3;
+    doc.save();
+    doc.roundedRect(x, y, width, height, r).fill(bg);
+    doc
+      .lineWidth(0.45)
+      .strokeColor(border)
+      .roundedRect(x, y, width, height, r)
+      .stroke();
+    doc.fillColor(textColor).font('Helvetica').fontSize(fontSize);
+    doc.text(label, x + 8, y + (height - fontSize) / 2 - 1, {
+      width: width - 16,
+      lineBreak: false,
+    });
+    doc.restore();
+  }
+
+  private pdfDisbursementStatusColors(status: string): {
+    fill: string;
+    stroke: string;
+    text: string;
+  } {
+    const s = status.toLowerCase();
+    if (s === 'paid') {
+      return { fill: '#defce8', stroke: '#c6edd3', text: '#44875d' };
+    }
+    if (s === 'processing') {
+      return { fill: '#fcfbde', stroke: '#fff892', text: '#ba750e' };
+    }
+    if (s === 'pending') {
+      return { fill: '#fffbeb', stroke: '#fde68a', text: '#b45309' };
+    }
+    if (s === 'failed') {
+      return { fill: '#fef2f2', stroke: '#fecaca', text: '#b91c1c' };
+    }
+    return { fill: '#f9fafb', stroke: '#e5e7eb', text: '#4b5563' };
+  }
+
+  private pdfReportStatusChipStyle(status: string): {
+    bg: string;
+    border: string;
+    text: string;
+    label: string;
+  } {
+    switch (status) {
+      case 'Finalised':
+        return {
+          bg: '#eefdf3',
+          border: '#d4fde7',
+          text: '#008234',
+          label: 'Finalised',
+        };
+      case 'Draft':
+        return {
+          bg: '#FFFBEB',
+          border: '#fde68a',
+          text: '#b45309',
+          label: 'Draft',
+        };
+      case 'Processing':
+        return {
+          bg: '#eff6ff',
+          border: '#bfdbfe',
+          text: '#1d4ed8',
+          label: 'Processing',
+        };
+      case 'Failed':
+        return {
+          bg: '#fef2f2',
+          border: '#fecaca',
+          text: '#991b1b',
+          label: 'Failed',
+        };
+      default:
+        return {
+          bg: '#ffffff',
+          border: '#e8e8e8',
+          text: '#475467',
+          label: status,
+        };
+    }
+  }
+
   private async generateExecutiveSummaryPdf(
     doc: typeof PDFDocument,
     report: ReportEntity,
   ): Promise<void> {
     const data = await this.fetchExecutiveSummaryData(report);
+    const margin = 40;
+    const pageH = doc.page.height;
+    const pageW = doc.page.width;
+    const contentW = pageW - margin * 2;
+    let y = margin;
 
-    doc.fontSize(20).text('Executive Summary', { align: 'center' });
-    doc.moveDown();
+    const reportTypeLabel =
+      report.reportType === ReportType.EXECUTIVE_SUMMARY
+        ? 'Executive Summary'
+        : String(report.reportType)
+            .replace(/([A-Z])/g, ' $1')
+            .trim();
 
-    doc.fontSize(12).text(`Report: ${report.name}`);
-    doc.text(`Reference: ${report.referenceNumber}`);
-    doc.text(
-      `Period: ${String(report.startDate)} to ${String(report.endDate)}`,
+    const fmtDay = (d: Date | string) => {
+      const dt = d instanceof Date ? d : new Date(d);
+      return Number.isNaN(dt.getTime())
+        ? '—'
+        : dt.toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          });
+    };
+
+    const fmtGen = (d: Date | string | null | undefined) => {
+      if (!d) return '—';
+      const dt = d instanceof Date ? d : new Date(d);
+      return Number.isNaN(dt.getTime())
+        ? '—'
+        : dt.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          });
+    };
+
+    const headerRightX = margin + contentW * 0.62;
+    const headerLeftW = contentW * 0.58;
+    const chipRowY = y;
+    const chipH = 18;
+
+    doc.font('Helvetica').fontSize(8);
+    const stStyle = this.pdfReportStatusChipStyle(String(report.status));
+    const statusLabel = stStyle.label;
+    const statusChipW = Math.min(
+      doc.widthOfString(statusLabel) + 22,
+      headerLeftW * 0.42,
     );
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`);
-    doc.moveDown(2);
-
-    doc.fontSize(14).text('Key Metrics', { underline: true });
-    doc.moveDown();
-    doc.fontSize(11);
-    doc.text(
-      `Total Budget Allocated: N${data.totalBudgetAllocated.toLocaleString()}`,
+    this.pdfRoundedChip(
+      doc,
+      margin,
+      chipRowY,
+      statusChipW,
+      chipH,
+      stStyle.bg,
+      stStyle.border,
+      statusLabel,
+      stStyle.text,
+      8,
     );
-    doc.text(`Total Disbursed: N${data.totalDisbursed.toLocaleString()}`);
-    doc.text(`Budget Utilization: ${data.utilizationRate}%`);
-    doc.text(
-      `Beneficiaries Reached: ${data.totalBeneficiaries.toLocaleString()}`,
-    );
-    doc.text(
-      `Pending Verification: ${data.pendingVerification.toLocaleString()}`,
-    );
-    doc.moveDown(2);
 
-    doc.fontSize(14).text('Fund Utilization Analysis', { underline: true });
-    doc.moveDown();
-    doc.fontSize(11);
-    doc.text(`Budget Received vs Allocated: ${data.receivedVsAllocatedRate}%`);
-    doc.text(`Spent vs Received: ${data.spentVsReceivedRate}%`);
-    doc.moveDown(2);
+    const periodText = `Period:  ${fmtDay(report.startDate)}  →  ${fmtDay(report.endDate)}`;
+    doc.font('Helvetica').fontSize(8);
+    const periodChipW = Math.min(
+      doc.widthOfString(periodText) + 22,
+      headerLeftW - statusChipW - 10,
+    );
+    this.pdfRoundedChip(
+      doc,
+      margin + statusChipW + 8,
+      chipRowY,
+      periodChipW,
+      chipH,
+      '#ffffff',
+      '#e8e8e8',
+      periodText,
+      '#475467',
+      7,
+    );
 
-    if (data.topLgas.length > 0) {
-      doc.fontSize(14).text('Top LGAs by Disbursal', { underline: true });
-      doc.moveDown();
-      doc.fontSize(11);
-      data.topLgas.forEach((lga, index) => {
+    doc.font('Helvetica').fontSize(9).fillColor('#6c7481');
+    doc.text('Generated on', headerRightX, chipRowY + 1, {
+      width: contentW * 0.38,
+      align: 'right',
+    });
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(10);
+    doc.text(
+      fmtGen(report.generatedAt ?? undefined),
+      headerRightX,
+      chipRowY + 12,
+      {
+        width: contentW * 0.38,
+        align: 'right',
+      },
+    );
+
+    y = chipRowY + chipH + 14;
+
+    doc.fillColor('#111827').fontSize(22).font('Helvetica-Bold');
+    doc.text(reportTypeLabel, margin, y, { width: headerLeftW + 40 });
+    y = doc.y + 8;
+
+    if (report.intervention?.name) {
+      doc.font('Helvetica').fontSize(8).fillColor('#7b7b7b');
+      doc.text('Active Filters:', margin, y);
+      y = doc.y + 4;
+      doc.fontSize(8);
+      const afW = Math.min(
+        doc.widthOfString(report.intervention.name) + 18,
+        contentW * 0.65,
+      );
+      this.pdfRoundedChip(
+        doc,
+        margin,
+        y,
+        afW,
+        16,
+        '#f9f9f9',
+        '#f1f1f1',
+        report.intervention.name,
+        '#343434',
+        8,
+      );
+      y = y + 22;
+    }
+
+    doc.font('Helvetica').fontSize(9).fillColor('#7b7b7b');
+    doc.text(`Ref: ${report.referenceNumber}`, margin, y);
+    y = doc.y + 14;
+
+    doc.strokeColor('#e9e9e9').lineWidth(1);
+    doc
+      .moveTo(margin, y)
+      .lineTo(margin + contentW, y)
+      .stroke();
+    y += 18;
+
+    const gap = 8;
+    const cardH = 86;
+    const cardW = (contentW - 3 * gap) / 4;
+    const cardsY = y;
+
+    const drawMetricCard = (
+      cx: number,
+      cy: number,
+      title: string,
+      value: string,
+      sub: string,
+      opts?: {
+        fill?: string;
+        stroke?: string;
+        titleColor?: string;
+        subColor?: string;
+      },
+    ) => {
+      if (opts?.fill) {
+        doc.fillColor(opts.fill).rect(cx, cy, cardW, cardH).fill();
+      }
+      doc.lineWidth(0.6);
+      doc.strokeColor(opts?.stroke ?? '#e9e9e9');
+      doc.rect(cx, cy, cardW, cardH).stroke();
+      doc
+        .fillColor(opts?.titleColor ?? '#111827')
+        .font('Helvetica-Bold')
+        .fontSize(9);
+      doc.text(title, cx + 8, cy + 10, { width: cardW - 16 });
+      doc.fillColor('#111827').font('Helvetica-Bold').fontSize(18);
+      doc.text(value, cx + 8, cy + 32, { width: cardW - 16 });
+      doc.font('Helvetica').fontSize(8);
+      doc.fillColor(
+        opts?.subColor ?? (opts?.stroke === '#aabc85' ? '#577241' : '#645E82'),
+      );
+      doc.text(sub, cx + 8, cy + 58, { width: cardW - 16 });
+    };
+
+    drawMetricCard(
+      margin,
+      cardsY,
+      'Budget Allocated',
+      this.pdfFmtNgnCompact(data.totalBudgetAllocated),
+      'For selected period',
+    );
+
+    drawMetricCard(
+      margin + cardW + gap,
+      cardsY,
+      'Disbursed Amount',
+      this.pdfFmtNgnCompact(data.totalDisbursed),
+      `${data.utilizationRate.toFixed(1)}% Utilization`,
+      {
+        fill: '#eef5d5',
+        stroke: '#aabc85',
+        titleColor: '#5e7446',
+      },
+    );
+
+    const benSub =
+      data.beneficiariesAddedInPeriod > 0
+        ? `+${data.beneficiariesAddedInPeriod.toLocaleString('en-NG')} in this period`
+        : 'Total enrolled';
+
+    drawMetricCard(
+      margin + 2 * (cardW + gap),
+      cardsY,
+      'Beneficiaries Reached',
+      data.totalBeneficiaries.toLocaleString('en-NG'),
+      benSub,
+      { subColor: '#7a9f3c' },
+    );
+
+    drawMetricCard(
+      margin + 3 * (cardW + gap),
+      cardsY,
+      'Pending Verification',
+      data.pendingVerification.toLocaleString('en-NG'),
+      'Applications in queue',
+    );
+
+    y = cardsY + cardH + 22;
+
+    const colGap = 14;
+    const leftColW = contentW * 0.52;
+    const rightColW = contentW - leftColW - colGap;
+    const leftX = margin;
+    const rightX = margin + leftColW + colGap;
+    const splitTop = y;
+
+    /* doc.save();
+    doc
+      .roundedRect(leftX - 4, splitTop - 4, leftColW + 8, 212, 4)
+      .fill('#fafafa');
+    doc
+      .roundedRect(rightX - 4, splitTop - 4, rightColW + 8, 212, 4)
+      .fill('#fafafa');
+    doc.restore(); */
+
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(12);
+    doc.text('Fund Utilisation Analysis', leftX, y);
+    y = doc.y + 10;
+
+    doc.font('Helvetica').fontSize(9).fillColor('#374151');
+    doc.text(
+      `Received vs Allocated    ${data.receivedVsAllocatedRate.toFixed(1)}%`,
+      leftX,
+      y,
+    );
+    y += 11;
+    this.pdfDrawHProgressBar(
+      doc,
+      leftX,
+      y,
+      leftColW,
+      6,
+      data.receivedVsAllocatedRate,
+      '#9ca3af',
+      '#e5e7eb',
+    );
+    y += 12;
+    doc.fontSize(8).fillColor('#6b7280');
+    doc.text(
+      `Received: ${this.pdfFmtNgn(data.totalBudgetReceived)}   ·   Allocated: ${this.pdfFmtNgn(data.totalBudgetAllocated)}`,
+      leftX,
+      y,
+      { width: leftColW },
+    );
+    y = doc.y + 12;
+
+    doc.fontSize(9).fillColor('#374151');
+    doc.text(
+      `Spent vs Received    ${data.spentVsReceivedRate.toFixed(1)}%`,
+      leftX,
+      y,
+    );
+    y += 11;
+    this.pdfDrawHProgressBar(
+      doc,
+      leftX,
+      y,
+      leftColW,
+      6,
+      data.spentVsReceivedRate,
+      '#577241',
+      '#e8eee0',
+    );
+    y += 12;
+    doc.fontSize(8).fillColor('#6b7280');
+    doc.text(
+      `Spent: ${this.pdfFmtNgn(data.totalDisbursed)}   ·   Received: ${this.pdfFmtNgn(data.totalBudgetReceived)}`,
+      leftX,
+      y,
+      { width: leftColW },
+    );
+    y = doc.y + 14;
+
+    const third = leftColW / 3;
+    doc.fontSize(7).fillColor('#9ca3af').font('Helvetica-Bold');
+    doc.text('REMAINING BUDGET', leftX, y);
+    doc.text('CASH ON HAND', leftX + third, y);
+    doc.text('AVG. PAYOUT', leftX + 2 * third, y);
+    y += 10;
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9);
+    doc.text(this.pdfFmtNgnCompact(data.remainingBudget), leftX, y);
+    doc.text(this.pdfFmtNgnCompact(data.cashOnHand), leftX + third, y);
+    doc.text(this.pdfFmtNgn(data.avgPayout), leftX + 2 * third, y);
+    y = doc.y + 6;
+
+    let yRight = splitTop;
+    // doc.fillColor('#111827').font('Helvetica-Bold').fontSize(12);
+    doc.font('Helvetica-Bold').fontSize(12);
+    doc.text('Top LGAs by Disbursal', rightX, yRight);
+    yRight = doc.y + 8;
+
+    if (data.topLgas.length === 0) {
+      doc.font('Helvetica').fontSize(9).fillColor('#6b7280');
+      doc.text('No disbursement data for this period.', rightX, yRight);
+      yRight = doc.y + 6;
+    } else {
+      const maxAmt = Math.max(...data.topLgas.map((l) => l.totalAmount), 1);
+      const barColors = ['#577241', '#6d8a52', '#8faa6e', '#a5cb5a', '#c5d9a0'];
+      data.topLgas.forEach((lga, idx) => {
+        doc.font('Helvetica').fontSize(8).fillColor('#374151');
+        doc.text(lga.name, rightX, yRight, { width: rightColW * 0.58 });
         doc.text(
-          `${index + 1}. ${lga?.name?.toUpperCase() || 'N/A'}: N${lga.totalAmount.toLocaleString()} (${lga.beneficiaryCount} beneficiaries)`,
+          this.pdfFmtNgnCompact(lga.totalAmount),
+          rightX + rightColW * 0.58,
+          yRight,
+          { width: rightColW * 0.42, align: 'right' },
         );
+        yRight += 10;
+        const pct = (lga.totalAmount / maxAmt) * 100;
+        this.pdfDrawHProgressBar(
+          doc,
+          rightX,
+          yRight,
+          rightColW,
+          5,
+          pct,
+          barColors[idx % barColors.length] ?? '#577241',
+          '#f3f4f6',
+        );
+        yRight += 12;
       });
-      doc.moveDown(2);
     }
 
-    if (data.recentDisbursements.length > 0) {
+    y = Math.max(y, yRight) + 24;
+
+    if (y > pageH - 100) {
       doc.addPage();
-      doc.fontSize(14).text('Recent Disbursement Log', { underline: true });
-      doc.moveDown();
-      doc.fontSize(9);
-
-      const tableTop = doc.y;
-      const col1X = 50;
-      const col2X = 200;
-      const col3X = 350;
-      const col4X = 450;
-
-      doc.text('Beneficiary', col1X, tableTop);
-      doc.text('NIN', col2X, tableTop);
-      doc.text('Amount', col3X, tableTop);
-      doc.text('Status', col4X, tableTop);
-
-      let yPos = tableTop + 20;
-      data.recentDisbursements.forEach((disbursement) => {
-        doc.text(disbursement.beneficiaryName, col1X, yPos);
-        doc.text(disbursement.nin, col2X, yPos);
-        doc.text(`N${disbursement.amount.toLocaleString()}`, col3X, yPos);
-        doc.text(disbursement.status, col4X, yPos);
-        yPos += 20;
-
-        if (yPos > 700) {
-          doc.addPage();
-          yPos = 50;
-        }
-      });
+      y = margin;
     }
+
+    doc.save();
+    doc.roundedRect(margin - 2, y - 4, contentW + 4, 28, 3).fill('#fafafa');
+    doc
+      .lineWidth(0.6)
+      .strokeColor('#e9e9e9')
+      .roundedRect(margin - 2, y - 4, contentW + 4, 28, 3)
+      .stroke();
+    doc.restore();
+
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(12);
+    doc.text('Recent Disbursement Log', margin + 8, y + 2, {
+      width: contentW * 0.62,
+    });
+    doc.font('Helvetica').fontSize(8).fillColor('#6b7280');
+    doc.text(
+      `Last updated: ${fmtGen(report.generatedAt ?? undefined)}`,
+      margin + 8,
+      y + 16,
+      { width: contentW - 16, align: 'right' },
+    );
+    y += 32;
+
+    const wB = contentW * 0.23;
+    const wN = contentW * 0.11;
+    const wK = contentW * 0.24;
+    const wA = contentW * 0.13;
+    const wL = contentW * 0.14;
+    const wS = contentW * 0.15;
+    const colX = [
+      margin,
+      margin + wB,
+      margin + wB + wN,
+      margin + wB + wN + wK,
+      margin + wB + wN + wK + wA,
+      margin + wB + wN + wK + wA + wL,
+    ];
+
+    const drawDisbursementHeader = (yy: number): number => {
+      const hh = 24;
+      doc.save();
+      doc.rect(margin, yy, contentW, hh).fill('#fafafa');
+      doc
+        .lineWidth(0.6)
+        .strokeColor('#e9e9e9')
+        .rect(margin, yy, contentW, hh)
+        .stroke();
+      doc.fillColor('#577241').font('Helvetica-Bold').fontSize(8);
+      const titles = [
+        'Beneficiary',
+        'NIN',
+        'Banking Details',
+        'Amount',
+        'Location',
+        'Status',
+      ];
+      const widths = [wB, wN, wK, wA, wL, wS];
+      for (let i = 0; i < 6; i++) {
+        doc.text(titles[i], colX[i] + 4, yy + 8, { width: widths[i] - 8 });
+      }
+      doc.restore();
+      return yy + hh;
+    };
+
+    const slice = data.recentDisbursements.slice(0, 14);
+    let rowY = drawDisbursementHeader(y);
+    const rowH = 28;
+    const footerReserve = 48;
+
+    for (const row of slice) {
+      if (rowY + rowH > pageH - footerReserve) {
+        doc.addPage();
+        rowY = drawDisbursementHeader(margin);
+      }
+      doc.font('Helvetica-Bold').fontSize(7.5).fillColor('#475467');
+      doc.text(row.beneficiaryName, colX[0] + 4, rowY + 6, {
+        width: wB - 8,
+      });
+      doc.font('Helvetica').fillColor('#747e8c');
+      doc.text(row.nin, colX[1] + 4, rowY + 6, { width: wN - 8 });
+      doc.text(row.bankingDetails, colX[2] + 4, rowY + 6, {
+        width: wK - 8,
+      });
+      doc.font('Helvetica-Bold').fillColor('#475467');
+      doc.text(this.pdfFmtNgn(row.amount), colX[3] + 4, rowY + 6, {
+        width: wA - 8,
+      });
+      doc.font('Helvetica').fillColor('#747e8c');
+      doc.text(row.location, colX[4] + 4, rowY + 6, { width: wL - 8 });
+      const dst = this.pdfDisbursementStatusColors(row.status);
+      doc.font('Helvetica-Bold').fontSize(6.5);
+      const badgeW = Math.min(
+        wS - 8,
+        Math.max(52, doc.widthOfString(row.status) + 16),
+      );
+      doc.save();
+      doc.roundedRect(colX[5] + 4, rowY + 5, badgeW, 16, 8).fill(dst.fill);
+      doc
+        .lineWidth(0.35)
+        .strokeColor(dst.stroke)
+        .roundedRect(colX[5] + 4, rowY + 5, badgeW, 16, 8)
+        .stroke();
+      doc.fillColor(dst.text).font('Helvetica-Bold').fontSize(6.5);
+      doc.text(row.status, colX[5] + 8, rowY + 9, { width: badgeW - 12 });
+      doc.restore();
+
+      rowY += rowH;
+      doc.strokeColor('#f3f4f6').lineWidth(0.45);
+      doc
+        .moveTo(margin, rowY - 1)
+        .lineTo(margin + contentW, rowY - 1)
+        .stroke();
+    }
+
+    const totalRec =
+      data.disbursementCountInPeriod > 0
+        ? data.disbursementCountInPeriod
+        : data.totalBeneficiaries;
+    doc.fontSize(8).fillColor('#6b7280').font('Helvetica');
+    doc.text(
+      `Showing ${slice.length} most recent transactions from a total of ${totalRec.toLocaleString('en-NG')} records.`,
+      margin,
+      rowY + 8,
+      { width: contentW },
+    );
   }
 
   private async generateFinancialDisbursementPdf(
@@ -238,15 +774,15 @@ export class ReportGeneratorService {
     doc.moveDown();
     doc.fontSize(11);
     doc.text(`Total Disbursements: ${data.totalCount.toLocaleString()}`);
-    doc.text(`Total Amount: N${data.totalAmount.toLocaleString()}`);
+    doc.text(`Total Amount: NGN ${data.totalAmount.toLocaleString()}`);
     doc.text(
-      `Paid: ${data.paidCount.toLocaleString()} (N${data.paidAmount.toLocaleString()})`,
+      `Paid: ${data.paidCount.toLocaleString()} (NGN ${data.paidAmount.toLocaleString()})`,
     );
     doc.text(
-      `Pending: ${data.pendingCount.toLocaleString()} (N${data.pendingAmount.toLocaleString()})`,
+      `Pending: ${data.pendingCount.toLocaleString()} (NGN ${data.pendingAmount.toLocaleString()})`,
     );
     doc.text(
-      `Failed: ${data.failedCount.toLocaleString()} (N${data.failedAmount.toLocaleString()})`,
+      `Failed: ${data.failedCount.toLocaleString()} (NGN ${data.failedAmount.toLocaleString()})`,
     );
     doc.moveDown(2);
 
@@ -260,7 +796,7 @@ export class ReportGeneratorService {
       doc.text(
         `Beneficiary: ${disbursement.beneficiaryName} (${disbursement.nin})`,
       );
-      doc.text(`Amount: N${disbursement.amount.toLocaleString()}`);
+      doc.text(`Amount: NGN ${disbursement.amount.toLocaleString()}`);
       doc.text(`Status: ${disbursement.status}`);
       doc.text(`Date: ${new Date(disbursement.date).toLocaleDateString()}`);
       doc.moveDown();
@@ -321,10 +857,10 @@ export class ReportGeneratorService {
       doc.fontSize(10);
       doc.text(`Category: ${line.category}`);
       doc.text(`Fiscal Year: ${line.fiscalYear}`);
-      doc.text(`Allocated: N${line.allocatedAmount.toLocaleString()}`);
-      doc.text(`Committed: N${line.committedAmount.toLocaleString()}`);
-      doc.text(`Spent: N${line.spentAmount.toLocaleString()}`);
-      doc.text(`Remaining: N${line.remainingAmount.toLocaleString()}`);
+      doc.text(`Allocated: NGN ${line.allocatedAmount.toLocaleString()}`);
+      doc.text(`Committed: NGN ${line.committedAmount.toLocaleString()}`);
+      doc.text(`Spent: NGN ${line.spentAmount.toLocaleString()}`);
+      doc.text(`Remaining: NGN ${line.remainingAmount.toLocaleString()}`);
       doc.text(`Utilization: ${line.utilizationRate}%`);
       doc.moveDown(2);
     });
@@ -351,10 +887,12 @@ export class ReportGeneratorService {
     doc.moveDown();
     doc.fontSize(11);
     doc.text(
-      `Allocated: N${data.intervention.budgetAllocated.toLocaleString()}`,
+      `Allocated: NGN ${data.intervention.budgetAllocated.toLocaleString()}`,
     );
-    doc.text(`Received: N${data.intervention.budgetReceived.toLocaleString()}`);
-    doc.text(`Spent: N${data.intervention.budgetSpent.toLocaleString()}`);
+    doc.text(
+      `Received: NGN ${data.intervention.budgetReceived.toLocaleString()}`,
+    );
+    doc.text(`Spent: NGN ${data.intervention.budgetSpent.toLocaleString()}`);
     doc.text(`Utilization: ${data.utilizationRate}%`);
     doc.moveDown(2);
 
@@ -372,7 +910,7 @@ export class ReportGeneratorService {
     doc.text(
       `Total Disbursements: ${data.totalDisbursements.toLocaleString()}`,
     );
-    doc.text(`Total Amount: N${data.totalDisbursedAmount.toLocaleString()}`);
+    doc.text(`Total Amount: NGN ${data.totalDisbursedAmount.toLocaleString()}`);
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
@@ -409,11 +947,11 @@ export class ReportGeneratorService {
 
     sheet.addRow({
       metric: 'Total Budget Allocated',
-      value: `₦${data.totalBudgetAllocated.toLocaleString()}`,
+      value: this.reportMoneyCell(data.totalBudgetAllocated),
     });
     sheet.addRow({
       metric: 'Total Disbursed',
-      value: `₦${data.totalDisbursed.toLocaleString()}`,
+      value: this.reportMoneyCell(data.totalDisbursed),
     });
     sheet.addRow({
       metric: 'Budget Utilization',
@@ -439,7 +977,7 @@ export class ReportGeneratorService {
       data.topLgas.forEach((lga) => {
         lgaSheet.addRow({
           name: lga?.name?.toUpperCase() || 'N/A',
-          amount: `₦${lga.totalAmount.toLocaleString()}`,
+          amount: this.reportMoneyCell(lga.totalAmount),
           count: lga.beneficiaryCount,
         });
       });
@@ -458,7 +996,7 @@ export class ReportGeneratorService {
         disbSheet.addRow({
           beneficiary: disb.beneficiaryName,
           nin: disb.nin,
-          amount: `₦${disb.amount.toLocaleString()}`,
+          amount: this.reportMoneyCell(disb.amount),
           status: disb.status,
         });
       });
@@ -486,7 +1024,7 @@ export class ReportGeneratorService {
         batchNumber: disb.batchNumber,
         beneficiary: disb.beneficiaryName,
         nin: disb.nin,
-        amount: `₦${disb.amount.toLocaleString()}`,
+        amount: this.reportMoneyCell(disb.amount),
         status: disb.status,
         date: new Date(disb.date).toLocaleDateString(),
       });
@@ -546,10 +1084,10 @@ export class ReportGeneratorService {
         name: line.name,
         category: line.category,
         fiscalYear: line.fiscalYear,
-        allocated: `₦${line.allocatedAmount.toLocaleString()}`,
-        committed: `₦${line.committedAmount.toLocaleString()}`,
-        spent: `₦${line.spentAmount.toLocaleString()}`,
-        remaining: `₦${line.remainingAmount.toLocaleString()}`,
+        allocated: this.reportMoneyCell(line.allocatedAmount),
+        committed: this.reportMoneyCell(line.committedAmount),
+        spent: this.reportMoneyCell(line.spentAmount),
+        remaining: this.reportMoneyCell(line.remainingAmount),
         utilization: `${line.utilizationRate}%`,
       });
     });
@@ -577,15 +1115,15 @@ export class ReportGeneratorService {
     sheet.addRow({});
     sheet.addRow({
       metric: 'Budget Allocated',
-      value: `₦${data.intervention.budgetAllocated.toLocaleString()}`,
+      value: this.reportMoneyCell(data.intervention.budgetAllocated),
     });
     sheet.addRow({
       metric: 'Budget Received',
-      value: `₦${data.intervention.budgetReceived.toLocaleString()}`,
+      value: this.reportMoneyCell(data.intervention.budgetReceived),
     });
     sheet.addRow({
       metric: 'Budget Spent',
-      value: `₦${data.intervention.budgetSpent.toLocaleString()}`,
+      value: this.reportMoneyCell(data.intervention.budgetSpent),
     });
     sheet.addRow({
       metric: 'Utilization Rate',
@@ -608,7 +1146,7 @@ export class ReportGeneratorService {
     });
     sheet.addRow({
       metric: 'Total Disbursed Amount',
-      value: `₦${data.totalDisbursedAmount.toLocaleString()}`,
+      value: this.reportMoneyCell(data.totalDisbursedAmount),
     });
   }
 
@@ -630,6 +1168,8 @@ export class ReportGeneratorService {
     utilizationRate: number;
     totalBeneficiaries: number;
     pendingVerification: number;
+    beneficiariesAddedInPeriod: number;
+    disbursementCountInPeriod: number;
     receivedVsAllocatedRate: number;
     spentVsReceivedRate: number;
     remainingBudget: number;
@@ -722,6 +1262,23 @@ export class ReportGeneratorService {
           })
         : 0;
 
+    let beneficiariesAddedInPeriod = 0;
+    let disbursementCountInPeriod = 0;
+    if (interventionIds.length > 0 && report.startDate && report.endDate) {
+      beneficiariesAddedInPeriod = await this.enrollmentRepository.count({
+        where: {
+          intervention_id: In(interventionIds),
+          created_at: Between(report.startDate, report.endDate),
+        },
+      });
+      disbursementCountInPeriod = await this.disbursementRepository.count({
+        where: {
+          interventionId: In(interventionIds),
+          createdAt: Between(report.startDate, report.endDate),
+        },
+      });
+    }
+
     let topLgas: Array<{
       name: string;
       total_amount: string;
@@ -794,6 +1351,8 @@ export class ReportGeneratorService {
       utilizationRate,
       totalBeneficiaries,
       pendingVerification,
+      beneficiariesAddedInPeriod,
+      disbursementCountInPeriod,
       receivedVsAllocatedRate,
       spentVsReceivedRate,
       remainingBudget,

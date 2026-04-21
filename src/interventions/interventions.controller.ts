@@ -24,6 +24,11 @@ import { BeneficiariesService } from '../beneficiaries/beneficiaries.service';
 import { DisbursementsService } from '../disbursements/disbursements.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import { QueryInterventionsDto } from './dto/query-interventions.dto';
+import { QueryBeneficiariesDto } from '../beneficiaries/dto/query-beneficiaries.dto';
+import { EnrollmentsService } from '../enrollments/enrollments.service';
+import { Audit } from '../audit/decorators/audit.decorator';
+import { ActivityType } from '../audit/constants/audit-action.enum';
 
 @Controller({ version: '1', path: 'interventions' })
 @UseGuards(PassportJwtGuard, RolesGuard)
@@ -34,10 +39,12 @@ export class InterventionsController {
     private readonly dataReviewService: DataReviewService,
     private readonly beneficiariesService: BeneficiariesService,
     private readonly disbursementsService: DisbursementsService,
+    private readonly enrollmentsService: EnrollmentsService,
   ) {}
 
   @Post()
   @RequirePermission('interventions.createIntervention')
+  @Audit(ActivityType.INTERVENTION, 'Intervention created')
   async create(@Body() createInterventionDto: CreateInterventionDto) {
     const result = await this.interventionsService.create(
       createInterventionDto,
@@ -47,8 +54,8 @@ export class InterventionsController {
 
   @Get()
   @RequirePermission('interventions.viewInterventions')
-  async findAll() {
-    const result = await this.interventionsService.findAll();
+  async findAll(@Query() query: QueryInterventionsDto) {
+    const result = await this.interventionsService.findAll(query);
     return successResponse('Interventions fetched successfully', result);
   }
 
@@ -88,18 +95,12 @@ export class InterventionsController {
   @RequirePermission('interventions.viewInterventions')
   async getBeneficiaries(
     @Param('id') id: string,
-    @Query('includeDeleted') includeDeleted?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
+    @Query() query: QueryBeneficiariesDto,
   ) {
     await this.interventionsService.findOne(id);
-    const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : 1;
-    const limitNum = limit ? Math.max(1, parseInt(limit, 10) || 10) : 10;
     const result = await this.beneficiariesService.findAllByIntervention(
       id,
-      includeDeleted === 'true',
-      limitNum,
-      pageNum,
+      query,
     );
     return successResponse('Beneficiaries fetched successfully', result);
   }
@@ -107,6 +108,10 @@ export class InterventionsController {
   @Post(':id/disburse')
   @RequirePermission('financialManagement.manageBudget')
   @HttpCode(HttpStatus.CREATED)
+  @Audit(
+    ActivityType.DISBURSEMENT,
+    'Disbursement batch created for intervention pending enrollments',
+  )
   async disburse(
     @Param('id') id: string,
     @Body() body: { referenceNumber?: string },
@@ -128,8 +133,24 @@ export class InterventionsController {
     );
   }
 
+  @Delete(':id/beneficiaries/:beneficiaryId')
+  @RequirePermission('interventions.editIntervention')
+  @Audit(ActivityType.ENROLLMENT, 'Beneficiary removed from intervention')
+  async removeBeneficiary(
+    @Param('id') id: string,
+    @Param('beneficiaryId') beneficiaryId: string,
+  ) {
+    await this.interventionsService.findOne(id);
+    await this.enrollmentsService.removeByInterventionAndBeneficiary(
+      id,
+      beneficiaryId,
+    );
+    return successResponse('Beneficiary removed from intervention', null);
+  }
+
   @Patch(':id')
   @RequirePermission('interventions.editIntervention')
+  @Audit(ActivityType.INTERVENTION, 'Intervention updated')
   async update(
     @Param('id') id: string,
     @Body() updateInterventionDto: UpdateInterventionDto,
@@ -143,6 +164,7 @@ export class InterventionsController {
 
   @Delete(':id')
   @RequirePermission('interventions.editIntervention')
+  @Audit(ActivityType.INTERVENTION, 'Intervention deleted')
   async remove(@Param('id') id: string) {
     const result = await this.interventionsService.remove(id);
     return successResponse('Intervention deleted successfully', result);

@@ -5,12 +5,14 @@ import type { Cache } from 'cache-manager';
 import { DataSource } from 'typeorm';
 import { DisbursementStatus } from '../disbursements/entities/disbursement.entity';
 import { PendingBeneficiaryStatus } from '../data-review/entities/pending-beneficiary.entity';
+import { InterventionStatus } from '../interventions/entities/intervention.entity';
 import {
   BeneficiaryGrowthPeriod,
   RecentDisbursementsQueryDto,
   TopListQueryDto,
 } from './dto/dashboard-queries.dto';
 import { DashboardCacheService } from './dashboard-cache.service';
+import { ActivityLogsService } from '../audit/services/activity-logs.service';
 
 const OVERVIEW_CACHE_MS = 120_000;
 const TOP_CACHE_MS = 120_000;
@@ -27,12 +29,25 @@ export class DashboardService {
     @Inject(CACHE_MANAGER)
     private readonly cache: Cache,
     private readonly dashboardCache: DashboardCacheService,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   private toNum(v: unknown): number {
     if (v == null) return 0;
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
+  }
+
+  /**
+   * Percent change (current vs prior period).
+   * When both are zero → `0`. When prior is exactly zero and current is positive → `100`
+   * (conventional “from zero” growth; the ratio is undefined in pure math but this reads as a clear increase in product/analytics UIs).
+   */
+  private percentChange(current: number, prior: number): number {
+    if (prior === 0 && current === 0) return 0;
+    if (prior === 0 && current > 0) return 100;
+    const raw = ((current - prior) / prior) * 100;
+    return Math.round(raw * 10) / 10;
   }
 
   private scopedCacheKey(logicalKey: string): string {
@@ -55,32 +70,61 @@ export class DashboardService {
   }
 
   async getOverview() {
-    return this.cached(
-      'dashboard:overview:v1',
-      async () => {
-        const [
-          [interventionRow],
-          demoRow,
-          interventionBudgetRow,
-          orgBudgetRow,
-          disbursedRow,
-          pendingRow,
-        ] = await Promise.all([
-          this.dataSource.query<{ count: string }[]>(
-            `SELECT COUNT(*)::text AS count FROM interventions WHERE deleted_at IS NULL`,
-          ),
-          this.dataSource.query<
-            {
-              total: string;
-              male: string;
-              female: string;
-              other: string;
-              unknown_gender: string;
-              with_disability: string;
-              without_disability: string;
-            }[]
-          >(
-            `SELECT
+    const [stats, recentActivity] = await Promise.all([
+      this.cached(
+        'dashboard:overview:v3',
+        () => this.buildOverviewStatistics(),
+        OVERVIEW_CACHE_MS,
+      ),
+      this.cached(
+        'dashboard:overview:recentActivity:v1',
+        () => this.activityLogsService.findRecentForDashboard(),
+        RECENT_CACHE_MS,
+      ),
+    ]);
+
+    return { ...stats, recentActivity };
+  }
+
+  private async buildOverviewStatistics() {
+    const [
+      [interventionStatsRow],
+      demoRow,
+      interventionBudgetRow,
+      orgBudgetRow,
+      disbursedRow,
+      pendingRow,
+      disbursedMomRow,
+      beneficiaryMomRow,
+      activeProgramsMomRow,
+    ] = await Promise.all([
+      this.dataSource.query<
+        { total: string; active: string; pending: string }[]
+      >(
+        `SELECT
+            COUNT(*)::text AS total,
+            COUNT(*) FILTER (WHERE status = $1)::text AS active,
+            COUNT(*) FILTER (WHERE status IN ($2, $3))::text AS pending
+          FROM interventions
+          WHERE deleted_at IS NULL`,
+        [
+          InterventionStatus.ACTIVE,
+          InterventionStatus.DRAFT,
+          InterventionStatus.SUSPENDED,
+        ],
+      ),
+      this.dataSource.query<
+        {
+          total: string;
+          male: string;
+          female: string;
+          other: string;
+          unknown_gender: string;
+          with_disability: string;
+          without_disability: string;
+        }[]
+      >(
+        `SELECT
               COUNT(DISTINCT b.id)::text AS total,
               COUNT(DISTINCT b.id) FILTER (WHERE b.gender = 'Male')::text AS male,
               COUNT(DISTINCT b.id) FILTER (WHERE b.gender = 'Female')::text AS female,
@@ -91,59 +135,113 @@ export class DashboardService {
             FROM beneficiaries b
             INNER JOIN intervention_enrollments e ON e.beneficiary_id = b.id
             WHERE b.deleted_at IS NULL`,
-          ),
-          this.dataSource.query<{ intervention_total: string }[]>(
-            `SELECT COALESCE(SUM(budget_allocated), 0)::text AS intervention_total
+      ),
+      this.dataSource.query<{ intervention_total: string }[]>(
+        `SELECT COALESCE(SUM(budget_allocated), 0)::text AS intervention_total
              FROM interventions WHERE deleted_at IS NULL`,
-          ),
-          this.dataSource.query<{ org_budget: string }[]>(
-            `SELECT COALESCE(SUM(allocated_amount), 0)::text AS org_budget
+      ),
+      this.dataSource.query<{ org_budget: string }[]>(
+        `SELECT COALESCE(SUM(allocated_amount), 0)::text AS org_budget
              FROM budget_lines WHERE is_active = true`,
-          ),
-          this.dataSource.query<{ total: string }[]>(
-            `SELECT COALESCE(SUM(amount), 0)::text AS total
+      ),
+      this.dataSource.query<{ total: string }[]>(
+        `SELECT COALESCE(SUM(amount), 0)::text AS total
              FROM disbursements WHERE status = $1`,
-            [DisbursementStatus.PAID],
-          ),
-          this.dataSource.query<{ count: string }[]>(
-            `SELECT COUNT(*)::text AS count FROM pending_beneficiaries WHERE status = $1`,
-            [PendingBeneficiaryStatus.PENDING_REVIEW],
-          ),
-        ]);
+        [DisbursementStatus.PAID],
+      ),
+      this.dataSource.query<{ count: string }[]>(
+        `SELECT COUNT(*)::text AS count FROM pending_beneficiaries WHERE status = $1`,
+        [PendingBeneficiaryStatus.PENDING_REVIEW],
+      ),
+      this.dataSource.query<{ cur: string; prev: string }[]>(
+        `WITH m AS (SELECT date_trunc('month', CURRENT_TIMESTAMP) AS cur_month)
+         SELECT
+           COALESCE(SUM(d.amount) FILTER (
+             WHERE date_trunc('month', COALESCE(d.payment_date, d.created_at)) = (SELECT cur_month FROM m)
+           ), 0)::text AS cur,
+           COALESCE(SUM(d.amount) FILTER (
+             WHERE date_trunc('month', COALESCE(d.payment_date, d.created_at)) =
+               (SELECT cur_month FROM m) - interval '1 month'
+           ), 0)::text AS prev
+         FROM disbursements d
+         WHERE d.status = $1`,
+        [DisbursementStatus.PAID],
+      ),
+      this.dataSource.query<{ total_end_prev_month: string }[]>(
+        `SELECT (
+             SELECT COUNT(DISTINCT e.beneficiary_id)::text
+             FROM intervention_enrollments e
+             INNER JOIN beneficiaries b ON b.id = e.beneficiary_id AND b.deleted_at IS NULL
+             WHERE e.created_at < date_trunc('month', CURRENT_TIMESTAMP)
+           ) AS total_end_prev_month`,
+      ),
+      this.dataSource.query<
+        { active_now: string; active_before_month: string }[]
+      >(
+        `SELECT
+           COUNT(*) FILTER (WHERE status = $1)::text AS active_now,
+           COUNT(*) FILTER (
+             WHERE status = $1 AND created_at < date_trunc('month', CURRENT_TIMESTAMP)
+           )::text AS active_before_month
+         FROM interventions
+         WHERE deleted_at IS NULL`,
+        [InterventionStatus.ACTIVE],
+      ),
+    ]);
 
-        const demo = demoRow[0];
+    const demo = demoRow[0];
+    const disbMom = disbursedMomRow[0];
+    const benMom = beneficiaryMomRow[0];
+    const actMom = activeProgramsMomRow[0];
 
-        return {
-          interventions: {
-            total: this.toNum(interventionRow?.count),
-          },
-          beneficiaries: {
-            totalEnrolled: this.toNum(demo?.total),
-            byGender: {
-              male: this.toNum(demo?.male),
-              female: this.toNum(demo?.female),
-              other: this.toNum(demo?.other),
-              unknown: this.toNum(demo?.unknown_gender),
-            },
-            byDisability: {
-              withDisability: this.toNum(demo?.with_disability),
-              withoutDisability: this.toNum(demo?.without_disability),
-            },
-          },
-          budget: {
-            interventionsAllocated: this.toNum(
-              interventionBudgetRow[0]?.intervention_total,
-            ),
-            organizationAllocated: this.toNum(orgBudgetRow[0]?.org_budget),
-            totalDisbursed: this.toNum(disbursedRow[0]?.total),
-          },
-          pendingVerification: {
-            pendingBeneficiaryReviews: this.toNum(pendingRow[0]?.count),
-          },
-        };
+    const disbursedThisMonth = this.toNum(disbMom?.cur);
+    const disbursedPrevMonth = this.toNum(disbMom?.prev);
+    const beneficiariesEndPrev = this.toNum(benMom?.total_end_prev_month);
+    const activeNow = this.toNum(actMom?.active_now);
+    const activeBeforeMonth = this.toNum(actMom?.active_before_month);
+
+    return {
+      interventions: {
+        total: this.toNum(interventionStatsRow?.total),
+        active: this.toNum(interventionStatsRow?.active),
+        pending: this.toNum(interventionStatsRow?.pending),
+        activeChangePercentVsLastMonth: this.percentChange(
+          activeNow,
+          activeBeforeMonth,
+        ),
       },
-      OVERVIEW_CACHE_MS,
-    );
+      beneficiaries: {
+        totalEnrolled: this.toNum(demo?.total),
+        byGender: {
+          male: this.toNum(demo?.male),
+          female: this.toNum(demo?.female),
+          other: this.toNum(demo?.other),
+          unknown: this.toNum(demo?.unknown_gender),
+        },
+        byDisability: {
+          withDisability: this.toNum(demo?.with_disability),
+          withoutDisability: this.toNum(demo?.without_disability),
+        },
+        totalEnrolledChangePercentVsLastMonth: this.percentChange(
+          this.toNum(demo?.total),
+          beneficiariesEndPrev,
+        ),
+      },
+      budget: {
+        interventionsAllocated: this.toNum(
+          interventionBudgetRow[0]?.intervention_total,
+        ),
+        organizationAllocated: this.toNum(orgBudgetRow[0]?.org_budget),
+        totalDisbursed: this.toNum(disbursedRow[0]?.total),
+        monthlyDisbursedChangePercentVsLastMonth: this.percentChange(
+          disbursedThisMonth,
+          disbursedPrevMonth,
+        ),
+      },
+      pendingVerification: {
+        pendingBeneficiaryReviews: this.toNum(pendingRow[0]?.count),
+      },
+    };
   }
 
   async getTopInterventions(query: TopListQueryDto) {
@@ -157,6 +255,7 @@ export class DashboardService {
             id: string;
             name: string;
             program_code: string;
+            status: string;
             beneficiary_count: string;
             budget_allocated: string;
             disbursed: string;
@@ -166,6 +265,7 @@ export class DashboardService {
             i.id,
             i.name,
             i.program_code,
+            i.status::text AS status,
             (
               SELECT COUNT(DISTINCT e.beneficiary_id)::text
               FROM intervention_enrollments e
@@ -189,6 +289,7 @@ export class DashboardService {
           interventionId: r.id,
           name: r.name,
           programCode: r.program_code,
+          status: r.status,
           beneficiaryCount: this.toNum(r.beneficiary_count),
           budgetAllocated: this.toNum(r.budget_allocated),
           totalDisbursed: this.toNum(r.disbursed),

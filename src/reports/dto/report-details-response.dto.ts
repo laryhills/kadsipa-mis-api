@@ -25,6 +25,10 @@ export class ExecutiveSummaryDataDto {
   utilizationRate: number;
   totalBeneficiaries: number;
   pendingVerification: number;
+  /** Enrollments with `created_at` within the report period */
+  beneficiariesAddedInPeriod: number;
+  /** Disbursement rows with `created_at` within the report period */
+  disbursementCountInPeriod: number;
   receivedVsAllocatedRate: number;
   spentVsReceivedRate: number;
   remainingBudget: number;

@@ -23,10 +23,25 @@ import { RefreshTokenService } from './services/refresh-token.service';
 import { RateLimiterService } from './services/rate-limiter.service';
 import { LoginDto, VerifyOtpDto, ResendOtpDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { RevokeOthersSessionsDto } from './dto/revoke-sessions.dto';
 import { OtpType } from './entities/otp.entity';
 import { UsersService } from '@/users/users.service';
 import { UserStatus } from '@/users/entities/user.entity';
 import { TooManyRequestsException } from '@/common/exceptions/too-many-requests.exception';
+import { MfaService } from './mfa.service';
+
+function maskEmailForLogin(email: string): string {
+  const at = email.indexOf('@');
+  if (at < 1) {
+    return '***';
+  }
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  if (local.length <= 1) {
+    return `*@${domain}`;
+  }
+  return `${local[0]}***@${domain}`;
+}
 
 export type RequestWithUser = ExpressRequest & { user: LoginData };
 
@@ -39,11 +54,12 @@ export class AuthController {
     private readonly otpService: OtpService,
     private readonly refreshTokenService: RefreshTokenService,
     private readonly rateLimiterService: RateLimiterService,
+    private readonly mfaService: MfaService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
-  @Audit(ActivityType.AUTH, 'User requested OTP')
+  @Audit(ActivityType.AUTH, 'User validated password for login')
   async requestOtp(@Body() loginDto: LoginDto) {
     const rateLimit = await this.rateLimiterService.checkOtpRateLimit(
       loginDto.email,
@@ -58,6 +74,24 @@ export class AuthController {
     const user = await this.authService.validateUser(loginDto);
     if (!user) {
       throw new BadRequestException('Invalid credentials');
+    }
+
+    const userRecord = await this.usersService.findOneByEmail(loginDto.email);
+    if (!userRecord) {
+      throw new BadRequestException('Invalid credentials');
+    }
+
+    if (userRecord.mfa_totp_enabled) {
+      const mfaChallengeToken = await this.mfaService.signMfaChallengeToken(
+        userRecord.id,
+        userRecord.email,
+      );
+      return successResponse('Complete sign-in with your authenticator app', {
+        step: 'mfa_totp' as const,
+        mfaChallengeToken,
+        maskedEmail: maskEmailForLogin(userRecord.email),
+        emailBackupEnabled: userRecord.mfa_email_backup_enabled,
+      });
     }
 
     const otp = await this.otpService.createOtp(user.id, OtpType.LOGIN);
@@ -101,39 +135,11 @@ export class AuthController {
       OtpType.LOGIN,
     );
 
-    const user: LoginData = {
-      id: userEntity.id,
-      email: userEntity.email,
-      full_name: userEntity.full_name,
-      status: userEntity.status,
-      requirePasswordChange: userEntity.status === UserStatus.PENDING,
-    };
-
-    const accessToken = this.authService.generateAccessToken(user);
-    const refreshToken = await this.refreshTokenService.createRefreshToken(
-      user.id,
-      {
-        userAgent: req.headers['user-agent'],
-        ip,
-      },
+    const response = await this.authService.issueLoginSuccessData(
+      userEntity.id,
+      req,
+      ip,
     );
-
-    await this.authService.login(user);
-
-    const userWithRoles =
-      await this.usersService.getUserWithRolesAndPermissions(userEntity.id);
-
-    const response = {
-      id: user.id,
-      email: user.email,
-      full_name: user.full_name,
-      status: user.status,
-      requirePasswordChange: user.requirePasswordChange,
-      roles: userWithRoles.roles,
-      permissions: userWithRoles.allPermissions,
-      accessToken,
-      refreshToken,
-    };
 
     return successResponse('Login successful', response);
   }
@@ -193,7 +199,11 @@ export class AuthController {
 
     const userEntity = await this.usersService.findOne(userId);
 
-    if (!userEntity || userEntity.status !== UserStatus.ACTIVE) {
+    if (
+      !userEntity ||
+      (userEntity.status !== UserStatus.ACTIVE &&
+        userEntity.status !== UserStatus.PENDING)
+    ) {
       throw new BadRequestException('Invalid user or inactive account');
     }
 
@@ -261,6 +271,21 @@ export class AuthController {
       'Password changed successfully. You can now login with your new password.',
       null,
     );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('sessions/revoke-others')
+  @UseGuards(PassportJwtGuard)
+  @Audit(ActivityType.AUTH, 'User revoked other sessions')
+  async revokeOtherSessions(
+    @Body() body: RevokeOthersSessionsDto,
+    @Req() req: RequestWithUser,
+  ) {
+    await this.refreshTokenService.revokeOtherSessions(
+      req.user.id,
+      body.refreshToken,
+    );
+    return successResponse('Other sessions have been signed out', null);
   }
 
   @HttpCode(HttpStatus.OK)
