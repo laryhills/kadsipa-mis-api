@@ -38,6 +38,18 @@ export class DashboardService {
     return Number.isFinite(n) ? n : 0;
   }
 
+  /**
+   * Percent change (current vs prior period).
+   * When both are zero → `0`. When prior is exactly zero and current is positive → `100`
+   * (conventional “from zero” growth; the ratio is undefined in pure math but this reads as a clear increase in product/analytics UIs).
+   */
+  private percentChange(current: number, prior: number): number {
+    if (prior === 0 && current === 0) return 0;
+    if (prior === 0 && current > 0) return 100;
+    const raw = ((current - prior) / prior) * 100;
+    return Math.round(raw * 10) / 10;
+  }
+
   private scopedCacheKey(logicalKey: string): string {
     return `${logicalKey}:e${this.dashboardCache.getEpoch()}`;
   }
@@ -60,7 +72,7 @@ export class DashboardService {
   async getOverview() {
     const [stats, recentActivity] = await Promise.all([
       this.cached(
-        'dashboard:overview:v2',
+        'dashboard:overview:v3',
         () => this.buildOverviewStatistics(),
         OVERVIEW_CACHE_MS,
       ),
@@ -82,6 +94,9 @@ export class DashboardService {
       orgBudgetRow,
       disbursedRow,
       pendingRow,
+      disbursedMomRow,
+      beneficiaryMomRow,
+      activeProgramsMomRow,
     ] = await Promise.all([
       this.dataSource.query<
         { total: string; active: string; pending: string }[]
@@ -138,15 +153,62 @@ export class DashboardService {
         `SELECT COUNT(*)::text AS count FROM pending_beneficiaries WHERE status = $1`,
         [PendingBeneficiaryStatus.PENDING_REVIEW],
       ),
+      this.dataSource.query<{ cur: string; prev: string }[]>(
+        `WITH m AS (SELECT date_trunc('month', CURRENT_TIMESTAMP) AS cur_month)
+         SELECT
+           COALESCE(SUM(d.amount) FILTER (
+             WHERE date_trunc('month', COALESCE(d.payment_date, d.created_at)) = (SELECT cur_month FROM m)
+           ), 0)::text AS cur,
+           COALESCE(SUM(d.amount) FILTER (
+             WHERE date_trunc('month', COALESCE(d.payment_date, d.created_at)) =
+               (SELECT cur_month FROM m) - interval '1 month'
+           ), 0)::text AS prev
+         FROM disbursements d
+         WHERE d.status = $1`,
+        [DisbursementStatus.PAID],
+      ),
+      this.dataSource.query<{ total_end_prev_month: string }[]>(
+        `SELECT (
+             SELECT COUNT(DISTINCT e.beneficiary_id)::text
+             FROM intervention_enrollments e
+             INNER JOIN beneficiaries b ON b.id = e.beneficiary_id AND b.deleted_at IS NULL
+             WHERE e.created_at < date_trunc('month', CURRENT_TIMESTAMP)
+           ) AS total_end_prev_month`,
+      ),
+      this.dataSource.query<
+        { active_now: string; active_before_month: string }[]
+      >(
+        `SELECT
+           COUNT(*) FILTER (WHERE status = $1)::text AS active_now,
+           COUNT(*) FILTER (
+             WHERE status = $1 AND created_at < date_trunc('month', CURRENT_TIMESTAMP)
+           )::text AS active_before_month
+         FROM interventions
+         WHERE deleted_at IS NULL`,
+        [InterventionStatus.ACTIVE],
+      ),
     ]);
 
     const demo = demoRow[0];
+    const disbMom = disbursedMomRow[0];
+    const benMom = beneficiaryMomRow[0];
+    const actMom = activeProgramsMomRow[0];
+
+    const disbursedThisMonth = this.toNum(disbMom?.cur);
+    const disbursedPrevMonth = this.toNum(disbMom?.prev);
+    const beneficiariesEndPrev = this.toNum(benMom?.total_end_prev_month);
+    const activeNow = this.toNum(actMom?.active_now);
+    const activeBeforeMonth = this.toNum(actMom?.active_before_month);
 
     return {
       interventions: {
         total: this.toNum(interventionStatsRow?.total),
         active: this.toNum(interventionStatsRow?.active),
         pending: this.toNum(interventionStatsRow?.pending),
+        activeChangePercentVsLastMonth: this.percentChange(
+          activeNow,
+          activeBeforeMonth,
+        ),
       },
       beneficiaries: {
         totalEnrolled: this.toNum(demo?.total),
@@ -160,6 +222,10 @@ export class DashboardService {
           withDisability: this.toNum(demo?.with_disability),
           withoutDisability: this.toNum(demo?.without_disability),
         },
+        totalEnrolledChangePercentVsLastMonth: this.percentChange(
+          this.toNum(demo?.total),
+          beneficiariesEndPrev,
+        ),
       },
       budget: {
         interventionsAllocated: this.toNum(
@@ -167,6 +233,10 @@ export class DashboardService {
         ),
         organizationAllocated: this.toNum(orgBudgetRow[0]?.org_budget),
         totalDisbursed: this.toNum(disbursedRow[0]?.total),
+        monthlyDisbursedChangePercentVsLastMonth: this.percentChange(
+          disbursedThisMonth,
+          disbursedPrevMonth,
+        ),
       },
       pendingVerification: {
         pendingBeneficiaryReviews: this.toNum(pendingRow[0]?.count),
@@ -185,6 +255,7 @@ export class DashboardService {
             id: string;
             name: string;
             program_code: string;
+            status: string;
             beneficiary_count: string;
             budget_allocated: string;
             disbursed: string;
@@ -194,6 +265,7 @@ export class DashboardService {
             i.id,
             i.name,
             i.program_code,
+            i.status::text AS status,
             (
               SELECT COUNT(DISTINCT e.beneficiary_id)::text
               FROM intervention_enrollments e
@@ -217,6 +289,7 @@ export class DashboardService {
           interventionId: r.id,
           name: r.name,
           programCode: r.program_code,
+          status: r.status,
           beneficiaryCount: this.toNum(r.beneficiary_count),
           budgetAllocated: this.toNum(r.budget_allocated),
           totalDisbursed: this.toNum(r.disbursed),
