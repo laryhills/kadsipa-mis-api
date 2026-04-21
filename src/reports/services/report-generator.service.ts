@@ -513,8 +513,7 @@ export class ReportGeneratorService {
       .fill('#fafafa');
     doc.restore(); */
 
-    // doc.fillColor('#111827').font('Helvetica-Bold').fontSize(12);
-    doc.font('Helvetica-Bold').fontSize(12);
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(12);
     doc.text('Fund Utilisation Analysis', leftX, y);
     y = doc.y + 10;
 

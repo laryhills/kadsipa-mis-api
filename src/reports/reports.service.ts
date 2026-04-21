@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike } from 'typeorm';
+import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { ReportEntity } from './entities/report.entity';
@@ -375,13 +375,23 @@ export class ReportsService {
 
   private async generateReferenceNumber(): Promise<string> {
     const year = new Date().getFullYear();
-    const count = await this.reportRepository.count({
-      where: {
-        referenceNumber: ILike(`RPT-${year}-%`),
-      },
-    });
+    const prefix = `RPT-${year}-`;
 
-    const nextNumber = (count + 1).toString().padStart(3, '0');
-    return `RPT-${year}-${nextNumber}`;
+    const last = await this.reportRepository
+      .createQueryBuilder('report')
+      .where('report.referenceNumber ILIKE :pattern', { pattern: `${prefix}%` })
+      .orderBy('report.referenceNumber', 'DESC')
+      .getOne();
+
+    let nextSeq = 1;
+    if (last?.referenceNumber?.startsWith(prefix)) {
+      const suffix = last.referenceNumber.slice(prefix.length);
+      const parsed = parseInt(suffix, 10);
+      if (!Number.isNaN(parsed)) {
+        nextSeq = parsed + 1;
+      }
+    }
+
+    return `${prefix}${nextSeq.toString().padStart(3, '0')}`;
   }
 }
