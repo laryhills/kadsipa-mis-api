@@ -15,5 +15,4 @@ Built with **NestJS** and **TypeORM** on **PostgreSQL**, with **MongoDB** for au
 
 Roadmap items from the implementation plan still in flight include consolidated **dashboard aggregation** endpoints, broader **CSV exports**, migration hardening, expanded tests, and optional **Neon** deployment paths.
 
-
 For local development: configure `.env.development`, run migrations (`npm run migration:run`), then `npm run start:dev`.
