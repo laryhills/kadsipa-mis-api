@@ -38,6 +38,12 @@ export class UserEntity {
   @Column({ nullable: true })
   mfa_secret: string;
 
+  @Column({ name: 'mfa_totp_enabled', default: false })
+  mfa_totp_enabled: boolean;
+
+  @Column({ name: 'mfa_email_backup_enabled', default: false })
+  mfa_email_backup_enabled: boolean;
+
   @CreateDateColumn()
   created_at: Date;
 
