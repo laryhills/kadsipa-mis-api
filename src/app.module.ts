@@ -5,7 +5,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { APP_FILTER } from '@nestjs/core';
 import { join } from 'path';
 import databaseConfig from '../config/database.config';
-import { AppController } from './app.controller';
+import { AppController, RootController } from './app.controller';
 import { AppService } from './app.service';
 import { InterventionsModule } from './interventions/interventions.module';
 import { UsersModule } from './users/users.module';
@@ -105,7 +105,7 @@ import { HealthModule } from './health/health.module';
     DashboardModule,
     HealthModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, RootController],
   providers: [
     AppService,
     {
