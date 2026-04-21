@@ -5,6 +5,7 @@ import {
   IsUUID,
   IsInt,
   Min,
+  IsDateString,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ReportType } from '../enums/report-type.enum';
@@ -30,6 +31,15 @@ export class QueryReportsDto extends SortOrderQueryDto {
   @IsOptional()
   @IsEnum(ReportStatus)
   status?: ReportStatus;
+
+  /** Reports whose date range overlaps [periodStart, periodEnd] (inclusive). */
+  @IsOptional()
+  @IsDateString()
+  periodStart?: string;
+
+  @IsOptional()
+  @IsDateString()
+  periodEnd?: string;
 
   @IsOptional()
   @IsInt()
