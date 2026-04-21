@@ -76,7 +76,14 @@ export class ReportsService {
     page: number;
     limit: number;
   }> {
-    const { search, interventionId, reportType, status } = query;
+    const {
+      search,
+      interventionId,
+      reportType,
+      status,
+      periodStart,
+      periodEnd,
+    } = query;
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
     const sortBy: ReportListSortBy = query.sortBy ?? ReportListSortBy.createdAt;
@@ -108,6 +115,13 @@ export class ReportsService {
 
     if (status) {
       qb.andWhere('report.status = :status', { status });
+    }
+
+    if (periodStart && periodEnd) {
+      qb.andWhere(
+        'report.startDate <= :periodEnd AND report.endDate >= :periodStart',
+        { periodStart, periodEnd },
+      );
     }
 
     switch (sortBy) {
