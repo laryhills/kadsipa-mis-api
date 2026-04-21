@@ -35,8 +35,8 @@ export class UserEntity {
   @Column({ nullable: false, default: UserStatus.ACTIVE })
   status: UserStatus;
 
-  @Column({ nullable: true })
-  mfa_secret: string;
+  @Column({ type: 'varchar', nullable: true })
+  mfa_secret: string | null;
 
   @Column({ name: 'mfa_totp_enabled', default: false })
   mfa_totp_enabled: boolean;

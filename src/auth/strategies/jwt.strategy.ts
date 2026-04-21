@@ -21,7 +21,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string; email: string }): Promise<LoginData> {
+  async validate(payload: {
+    sub: string;
+    email: string;
+    purpose?: string;
+  }): Promise<LoginData> {
+    if (payload.purpose) {
+      throw new UnauthorizedException('Invalid token');
+    }
     const user = await this.usersService.findActiveAuthUserById(payload.sub);
     if (!user) {
       throw new UnauthorizedException('Account is no longer available');
