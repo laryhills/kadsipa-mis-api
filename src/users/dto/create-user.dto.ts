@@ -5,8 +5,10 @@ export class CreateUserDto {
   @IsNotEmpty({ message: 'Email is required' })
   @IsEmail()
   @Transform(({ value }: { value: string }) => value.trim())
-  // email domain must be @kdsg.gov.ng
-  @Matches(/@kdsg\.gov\.ng$/, { message: 'Email domain must be @kdsg.gov.ng' })
+  // email domain must be @kdsg.gov.ng or @kadsipa.gov.ng
+  @Matches(/@(kdsg|kadsipa)\.gov\.ng$/, {
+    message: 'Email domain must be @kdsg.gov.ng or @kadsipa.gov.ng',
+  })
   email: string;
 
   @IsNotEmpty({ message: 'Password is required' })
