@@ -1,9 +1,12 @@
 import { Controller, Get, Query, Param, UseGuards } from '@nestjs/common';
 import { ActivityLogsService } from '../services/activity-logs.service';
 import { QueryActivityLogDto } from '../dto/query-activity-log.dto';
+import { QueryMyActivityLogDto } from '../dto/query-my-activity-log.dto';
 import { PassportJwtGuard } from '@/auth/guards/passport-jwt.guard';
 import { RolesGuard } from '@/auth/guards/roles.guard';
 import { RequirePermission } from '@/auth/decorators/require-permission.decorator';
+import { CurrentUser } from '@/auth/decorators/current-user.decorator';
+import type { JwtPayload } from '@/auth/interfaces/jwt-payload.interface';
 import { successResponse } from '@/common';
 
 const ROLE_PERMISSIONS_ACTIVITY_SEARCH = 'Role permissions updated';
@@ -26,6 +29,20 @@ export class ActivityLogsController {
       'Latest permission change retrieved successfully',
       result.data[0] ?? null,
     );
+  }
+
+  /** Activity history for the authenticated user only (any logged-in user). */
+  @Get('me')
+  @UseGuards(PassportJwtGuard)
+  async findMine(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: QueryMyActivityLogDto,
+  ) {
+    const result = await this.activityLogsService.findAll({
+      ...query,
+      user_id: user.id,
+    });
+    return successResponse('Your activity logs retrieved successfully', result);
   }
 
   @Get()

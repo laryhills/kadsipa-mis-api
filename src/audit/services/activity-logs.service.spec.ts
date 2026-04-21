@@ -97,5 +97,22 @@ describe('ActivityLogsService', () => {
         }),
       );
     });
+
+    it('filters by user_id when provided', async () => {
+      execMock.mockResolvedValue([]);
+      countExecMock.mockResolvedValue(0);
+
+      await service.findAll({
+        user_id: '550e8400-e29b-41d4-a716-446655440000',
+        page: 1,
+        limit: 10,
+      } as any);
+
+      expect(findMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: '550e8400-e29b-41d4-a716-446655440000',
+        }),
+      );
+    });
   });
 });
