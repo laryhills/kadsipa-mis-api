@@ -8,7 +8,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { hashPassword } from '../../common/utils/hash.util';
+import { hashPassword, isBcryptHash } from '../../common/utils/hash.util';
 import type { UserRoleEntity } from '../../roles/entities/user-role.entity';
 
 export enum UserStatus {
@@ -62,7 +62,7 @@ export class UserEntity {
   @BeforeInsert()
   @BeforeUpdate()
   async hashPassword(): Promise<void> {
-    if (this.password) {
+    if (this.password && !isBcryptHash(this.password)) {
       this.password = await hashPassword(this.password);
     }
   }
