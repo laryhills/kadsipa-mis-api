@@ -45,8 +45,8 @@ export class MailService {
 
     const fromEmail = this.configService.get<string>('SMTP_FROM_EMAIL');
     const appUrl = this.configService.get<string>(
-      'APP_URL',
-      'http://localhost:3000',
+      'FRONTEND_APP_URL',
+      'http://localhost:5183',
     );
 
     const htmlContent = this.generateInvitationEmailHtml(
@@ -299,7 +299,7 @@ export class MailService {
       </div>
 
       <center>
-        <a href="${appUrl}/login" class="button">Access KADSIPA MIS</a>
+        <a href="${appUrl}/login" class="button" style="color: #ffffff !important;">Access KADSIPA MIS</a>
       </center>
 
       <p class="message" style="margin-top: 32px;">
