@@ -3,7 +3,7 @@ import {
   IsEmail,
   IsNotEmpty,
   IsString,
-  Matches,
+  // Matches,
   IsArray,
   IsUUID,
   IsOptional,
@@ -13,9 +13,9 @@ export class InviteUserDto {
   @IsNotEmpty({ message: 'Email is required' })
   @IsEmail()
   @Transform(({ value }: { value: string }) => value.trim())
-  @Matches(/@(kdsg|kadsipa)\.gov\.ng$/, {
-    message: 'Email domain must be @kdsg.gov.ng or @kadsipa.gov.ng',
-  })
+  // @Matches(/@(kdsg|kadsipa)\.gov\.ng$/, {
+  //   message: 'Email domain must be @kdsg.gov.ng or @kadsipa.gov.ng',
+  // })
   email: string;
 
   @IsNotEmpty({ message: 'Full name is required' })
